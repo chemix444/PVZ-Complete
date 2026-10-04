@@ -4,6 +4,8 @@ A browser recreation of Plants vs. Zombies 1 and Plants vs. Zombies 2 built as o
 
 No proprietary code or assets are included. Gameplay is reimplemented from observable behavior and documented values; art and sound are procedural placeholders until you supply your own files (see [Local assets](#local-assets)).
 
+Play it: https://chemix444.github.io/PVZ-Complete/
+
 ## Status
 
 Milestone 1 is done: a playable PvZ 1 Day lawn with Peashooter, Sunflower and Wall-nut against basic, Flag and Conehead zombies, sky sun, seed selection, lawn mowers, waves, win and loss, recorded in the unified campaign save. See [COMPATIBILITY.md](COMPATIBILITY.md) for what is exact, close, incomplete or missing.
@@ -20,7 +22,9 @@ npm run typecheck
 npm run build      # static site in apps/game/dist
 ```
 
-No backend is needed; the built `dist` folder can be served by any static file host.
+No backend is needed; the built `dist` folder can be served by any static file host, at a domain root or under a subpath.
+
+Every push to the default branch runs `.github/workflows/pages.yml`, which typechecks, tests, builds and publishes `apps/game/dist` to the `gh-pages` branch that GitHub Pages serves.
 
 ## Playing
 
