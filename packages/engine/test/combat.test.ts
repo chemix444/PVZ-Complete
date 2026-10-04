@@ -102,7 +102,7 @@ describe('Projectiles', () => {
 });
 
 describe('Damage and armor', () => {
-  it('knocks a basic zombie’s head off with the 10th pea and its arm off with the 5th', () => {
+  it("knocks a basic zombie's head off with the 10th pea and its arm off with the 5th", () => {
     const sim = makeSim();
     const z = zombie(sim, 'basic', 0, 500);
     let hits = 0;

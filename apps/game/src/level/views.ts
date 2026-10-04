@@ -231,6 +231,7 @@ export class PickupView {
     const plantReward = pickup.rewards.find((r) => r.type === 'plant' && r.id && PlantRegistry.has(r.id));
     if (plantReward) {
       const packet = new SeedPacketView(PlantRegistry.get(plantReward.id!));
+      packet.setState({ charge: 1, affordable: true, held: false });
       packet.eventMode = 'none';
       packet.pivot.set(25, 35);
       this.root.addChild(packet);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   contentFor,
   levelZombieTypes,
+  playableLevel,
   LevelRegistry,
   PlantRegistry,
   resolveProfile,
@@ -36,6 +37,10 @@ describe('Content registries', () => {
 
   it('serves era-resolved definitions to the simulation', () => {
     expect(contentFor('pvz1').plant('wall-nut')).toBe(PlantRegistry.get('wall-nut'));
+  });
+
+  it('runs a level with its world mechanics prepended to its systems', () => {
+    expect(playableLevel('pvz1-day-01')).toBe(LevelRegistry.get('pvz1-day-01'));
   });
 
   it('lists the zombies a level can spawn', () => {

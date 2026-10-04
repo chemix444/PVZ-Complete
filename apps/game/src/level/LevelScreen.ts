@@ -1,7 +1,7 @@
 import { Container, Graphics, type FederatedPointerEvent } from 'pixi.js';
 import { plantArt } from '@pvz/assets';
 import type { CompletionResult } from '@pvz/campaign';
-import { BoardRegistry, contentFor, LevelRegistry, levelZombieTypes, PlantRegistry } from '@pvz/content';
+import { BoardRegistry, contentFor, levelZombieTypes, PlantRegistry, playableLevel } from '@pvz/content';
 import { Simulation, type BoardDef, type Command, type LevelDef, type PlantDef } from '@pvz/engine';
 import { recordLevelResult } from '@pvz/save';
 import type { DevSession, DevTool } from '@pvz/tools';
@@ -66,7 +66,7 @@ export class LevelScreen implements Screen, DevSession {
     private readonly hooks: LevelHooks,
   ) {
     this.levelId = levelId;
-    this.level = LevelRegistry.get(levelId);
+    this.level = playableLevel(levelId);
     this.board = BoardRegistry.get(this.level.board);
     this.scene = new BoardScene(this.board, ctx.assets);
     this.sounds = new LevelSounds(ctx.audio);

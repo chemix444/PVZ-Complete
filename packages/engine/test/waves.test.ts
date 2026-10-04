@@ -9,7 +9,7 @@ const threeWaves: WaveSpec[] = [
 ];
 
 describe('Wave pacing', () => {
-  it('spawns the first wave after the level’s first wave delay', () => {
+  it("spawns the first wave after the level's first wave delay", () => {
     const sim = makeSim({ waves: threeWaves, firstWaveDelay: 18 });
     const log = runUntil(sim, () => sim.waves.spawned > 0);
     const spawned = ofType(log, 'wave-spawned');
@@ -27,7 +27,6 @@ describe('Wave pacing', () => {
       expect(sim.waves.countdown).toBeGreaterThanOrEqual(2500);
       expect(sim.waves.countdown).toBeLessThanOrEqual(3100);
       runUntil(sim, () => sim.waves.spawned === 2);
-      expect(sim.tick - first).toBe(sim.waves.countdownStart === 0 ? 0 : sim.tick - first);
       expect(sim.tick - first).toBeGreaterThanOrEqual(2500);
       expect(sim.tick - first).toBeLessThanOrEqual(3100);
     }

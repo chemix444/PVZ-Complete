@@ -67,6 +67,14 @@ function cached<T>(map: Map<string, T>, id: string, make: () => T): T {
   return value;
 }
 
+/** The level as the simulation runs it: its world's mechanics come first in `systems`. */
+export function playableLevel(id: string): LevelDef {
+  const level = LevelRegistry.get(id);
+  const world = WorldRegistry.get(level.world);
+  if (world.mechanics.length === 0) return level;
+  return { ...level, systems: [...world.mechanics.map((type) => ({ type })), ...(level.systems ?? [])] };
+}
+
 /** Zombie types that can appear in a level, in first-appearance order. */
 export function levelZombieTypes(level: LevelDef): string[] {
   const ids = new Set<string>();
