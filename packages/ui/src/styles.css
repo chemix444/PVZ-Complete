@@ -1,0 +1,84 @@
+:root {
+  --pvz-green-dark: #1f4d12;
+  --pvz-green: #3f8f22;
+  --pvz-green-light: #8fd14f;
+  --pvz-wood: #8a5a2b;
+  --pvz-wood-dark: #5a3818;
+  --pvz-paper: #f4e7c5;
+  --pvz-ink: #2b1d0e;
+  --pvz-sun: #ffd23f;
+  --pvz-red: #c8321e;
+  --pvz-stone: #6d7a7f;
+  --pvz-font: 'Trebuchet MS', 'Segoe UI', Verdana, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #0d1a08;
+  color: var(--pvz-ink);
+  font-family: var(--pvz-font);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pvz-btn {
+  font-family: var(--pvz-font);
+  font-weight: 700;
+  font-size: 18px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: 3px solid var(--pvz-wood-dark);
+  cursor: pointer;
+  color: #fff8e1;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 0.06s ease, filter 0.1s ease;
+}
+.pvz-btn:hover { filter: brightness(1.12); }
+.pvz-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+.pvz-btn:disabled { filter: grayscale(0.8) brightness(0.7); cursor: default; }
+.pvz-btn:focus-visible { outline: 3px solid var(--pvz-sun); outline-offset: 2px; }
+.pvz-btn-primary { background: linear-gradient(#5cb83a, #2f7a19); }
+.pvz-btn-secondary { background: linear-gradient(#a67a46, #6d4520); }
+.pvz-btn-danger { background: linear-gradient(#d9573f, #8f2414); }
+
+.pvz-panel {
+  background: var(--pvz-paper);
+  border: 4px solid var(--pvz-wood);
+  border-radius: 14px;
+  padding: 16px 20px;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.3);
+}
+.pvz-panel-title {
+  margin: 0 0 12px;
+  font-size: 24px;
+  text-align: center;
+  color: var(--pvz-wood-dark);
+}
+
+.pvz-slider, .pvz-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  font-weight: 700;
+}
+.pvz-slider span:first-child { width: 90px; }
+.pvz-slider input { flex: 1; accent-color: var(--pvz-green); }
+.pvz-slider-value { width: 44px; text-align: right; }
+.pvz-toggle input { width: 18px; height: 18px; accent-color: var(--pvz-green); }
+
+.pvz-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 10;
+}
+.pvz-modal { max-width: 90%; }

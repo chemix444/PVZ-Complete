@@ -20,7 +20,7 @@ export const pvz1Boards: BoardDef[] = [
     projectileLimitX: 840,
     mower: { x: -15, width: 60, speed: 333 },
     skySun: { minX: 140, maxX: 690, startY: 40, minLandY: 170, maxLandY: 500, fallSpeed: 67 },
-    sunCollectTarget: { x: 40, y: 38 },
+    sunCollectTarget: { x: 46, y: 32 },
     view: { background: 'bg.pvz1.day', minX: -220, maxX: 1180, width: 800, height: 600 },
   },
 ];

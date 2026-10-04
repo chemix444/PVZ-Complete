@@ -4,6 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./dev.css": "./src/dev.css",
+    "./scan": "./src/scanAssets.ts"
+  },
+  "dependencies": {
+    "@pvz/engine": "*",
+    "@pvz/ui": "*",
+    "@pvz/assets": "*"
   }
 }

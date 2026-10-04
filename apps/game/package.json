@@ -9,6 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@pvz/assets": "*",
+    "@pvz/audio": "*",
+    "@pvz/campaign": "*",
+    "@pvz/content": "*",
+    "@pvz/engine": "*",
+    "@pvz/save": "*",
+    "@pvz/tools": "*",
+    "@pvz/ui": "*",
     "pixi.js": "^8.22.0"
   }
 }
