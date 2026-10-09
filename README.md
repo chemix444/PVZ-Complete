@@ -8,7 +8,7 @@ Play it: https://chemix444.github.io/PVZ-Complete/
 
 ## Status
 
-Milestone 1 is done: a playable PvZ 1 Day lawn with Peashooter, Sunflower and Wall-nut against basic, Flag and Conehead zombies, sky sun, seed selection, lawn mowers, waves, win and loss, recorded in the unified campaign save. See [COMPATIBILITY.md](COMPATIBILITY.md) for what is exact, close, incomplete or missing.
+PvZ 1 Day and Night are playable, 1-1 through 2-10: 16 plants, 10 zombie types, the 1-1 and 1-5 tutorials, the shovel, Wall-nut Bowling (1-5), Whack a Zombie (2-5), conveyor belt levels (1-10, 2-10), graves, sleeping mushrooms, hypnosis, freezing and the Almanac, all recorded in the unified campaign save. Pool is next. See [COMPATIBILITY.md](COMPATIBILITY.md) for what is exact, close, incomplete or missing.
 
 ## Running it
 
@@ -24,7 +24,7 @@ npm run build      # static site in apps/game/dist
 
 No backend is needed; the built `dist` folder can be served by any static file host, at a domain root or under a subpath.
 
-Every push to the default branch runs `.github/workflows/pages.yml`, which typechecks, tests, builds and publishes `apps/game/dist` to the `gh-pages` branch that GitHub Pages serves.
+Every push to `main` (and to the current development branch) runs `.github/workflows/pages.yml`, which typechecks, tests, builds and publishes `apps/game/dist` to the `gh-pages` branch. GitHub Pages must be set to serve that branch once, under Settings, Pages, "Deploy from a branch", `gh-pages` and `/ (root)`.
 
 ## Playing
 
@@ -32,11 +32,14 @@ Every push to the default branch runs `.github/workflows/pages.yml`, which typec
 - Pick plants for your seed bank and press Let's Rock.
 - Click a seed packet, then a lawn tile to plant. Right click or Escape drops the plant.
 - Click sun to collect it.
+- From 1-5 on, click the shovel and then a plant to dig it up.
+- On conveyor levels, click a packet on the belt and then a tile; belt plants are free.
+- In Whack a Zombie, click zombies as they climb out of their graves.
 - Escape or the Menu button pauses.
 
 ## Developer tools
 
-Press the backquote key (`` ` ``) anywhere to open the developer panel. It can change game speed, pause and step single ticks, add sun, skip waves, spawn any plant or zombie by clicking the lawn, toggle hitbox, targeting and grid overlays, inspect and edit entities, start any level, open any world, complete or open campaign nodes, grant plants and change seed slots. Settings has a toggle that also shows a Developer Tools button in the menus.
+Press the backquote key (`` ` ``) anywhere to open the developer panel. It can change game speed, pause and step single ticks, add sun, skip waves, spawn any plant or zombie by clicking the lawn, toggle hitbox, targeting and grid overlays, inspect and edit entities, start any level, open any world, complete or open campaign nodes, grant plants and change seed slots. Settings has a toggle that also shows a Developer Tools button in the menus. While `npm run dev` is running, `/gallery.html` shows every placeholder plant, zombie, armor stage and lawn.
 
 ## Local assets
 

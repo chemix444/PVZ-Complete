@@ -43,6 +43,8 @@ A plant or zombie that exists in both games is one definition. Values that diffe
 | `hitbox` | `{ left, width }` | span zombies bite, relative to the cell's left edge; default `{ left: 10, width: 60 }` |
 | `behaviors` | behavior specs | run every tick, in order |
 | `damageStages` | health fractions | where the damaged look changes (Wall-nut cracks) |
+| `nocturnal` | boolean | sleeps (runs no behaviors) on boards with `daytime: true` |
+| `placeOn` | `grave` | planted on a grave instead of an empty cell (Grave Buster) |
 | `tags`, `description`, `audio` | | `audio.fire` is played when a projectile is fired |
 | `profiles` | per-era overrides | |
 
@@ -58,8 +60,11 @@ A plant or zombie that exists in both games is one definition. Values that diffe
 | `fireDelay` | time from deciding to attack (animation start) to releasing the projectile |
 | `initialDelay` | counter value at planting; 0 checks on the first tick |
 | `spawnOffset` | `{ x, y }` projectile spawn point from the cell's top-left |
+| `burst`, `burstGap` | projectiles per attack and the time between them (Repeater: 2, 0.15) |
+| `range` | only targets zombies within this many px of the plant's right edge (Puff-shroom) |
+| `hideWithin` | hides and holds fire while a zombie is this close (Scaredy-shroom) |
 
-The shooter only looks for a target when its counter expires. A target is an active zombie in the same row whose hitbox has entered the screen (`attackLimitX`) and has not passed the plant.
+The shooter only looks for a target when its counter expires. A target is a hostile zombie in the same row whose hitbox has entered the screen (`attackLimitX`) and has not passed the plant.
 
 `producer`
 
@@ -69,6 +74,20 @@ The shooter only looks for a target when its counter expires. A target is an act
 | `firstDelay` | `[min, max]` seconds until the first sun |
 | `interval` | `[min, max]` seconds between later suns |
 | `glowLead` | seconds of glow before producing (visual cue only) |
+| `growAfter`, `grownAmount` | after this long the plant grows and produces `grownAmount` instead (Sun-shroom) |
+
+Other plant behaviors:
+
+| Type | Params | Used by |
+| --- | --- | --- |
+| `fume` | `damage`, `interval`, `intervalJitter`, `fireDelay`, `range` (px past the plant) | Fume-shroom |
+| `explode` | `fuse`, `damage`, `cols` and `rows` (cells reached on each side), `effect`, `crater` (seconds) | Cherry Bomb, Doom-shroom |
+| `freeze-all` | `fuse`, `damage`, `freeze`, `chill` (applied after the freeze) | Ice-shroom |
+| `mine` | `armTime`, `damage`, `blast` (px beyond the cell on each side) | Potato Mine |
+| `chomper` | `reach` (px past the cell), `biteDelay`, `chewTime`, `largeDamage` | Chomper |
+| `hypnotize` | none | Hypno-shroom |
+| `grave-buster` | `time` | Grave Buster |
+| `bowl` | `speed`, `damage`, `explode` | Wall-nut Bowling nuts |
 
 ## Zombies (`ZombieDef`)
 
@@ -83,7 +102,7 @@ The shooter only looks for a target when its counter expires. A target is an act
 | `attackBox` | `{ left, width }` span that bites plants |
 | `armor` | layers applied before the body, in order |
 | `behaviors` | `eater` must precede `walker` |
-| `spawn` | `{ value, weight }` for PvZ 1 wave budgets (used by the wave generator in a later milestone) |
+| `spawn` | `{ value, weight }`: cost and pick weight for the PvZ 1 wave generator |
 
 Armor layer: `{ id, kind: 'helmet' | 'shield', health, material, damageStages }`. Helmet damage beyond the helmet's remaining health carries into the body. `material` picks impact sounds and effects (`audio.<material>-hit` if it exists).
 
@@ -91,9 +110,18 @@ Armor layer: `{ id, kind: 'helmet' | 'shield', health, material, damageStages }`
 
 `walker` moves left at the zombie's speed while walking or dying. `eater` (`damage`, `interval`) bites the highest-layer, rightmost plant overlapping the attack box; the first bite lands one interval after contact.
 
+| Type | Params | Used by |
+| --- | --- | --- |
+| `pole-vault` | `runSpeed` (px/s range), `vaultTime` | Pole Vaulting Zombie |
+| `rage` | `armor` (the shield whose loss enrages it), `shock`, `speed` | Newspaper Zombie |
+| `dancer` | `backup` (zombie id), `moonwalkSpeed`, `stopX`, `summonTime`, `resummonEvery` | Dancing Zombie |
+| `dance-step` | `walk`, `pause` (seconds of each step on the shared dance clock) | Dancing and Backup Dancer |
+
+Behaviors that change movement run before `eater` and `walker` in the list.
+
 ## Projectiles (`ProjectileDef`)
 
-`{ id, era, motion: 'straight', speed, damage, damageType: 'normal', width, audio: { hit } }`. A straight projectile hits the leftmost collidable zombie in its row whose hitbox overlaps `[x, x + width]`. Lobbed, homing, piercing, splash and other motions will be added as new `motion` values.
+`{ id, era, motion: 'straight', speed, damage, damageType: 'normal', width, maxDistance?, chill?, audio: { hit } }`. `maxDistance` removes the projectile after it travels that far (Puff-shroom spores); `chill` slows the zombie it hits for that many seconds unless a shield took the hit. A straight projectile hits the leftmost collidable zombie in its row whose hitbox overlaps `[x, x + width]`. Lobbed, homing, piercing, splash and other motions will be added as new `motion` values.
 
 ## Boards (`BoardDef`)
 
@@ -108,6 +136,7 @@ Armor layer: `{ id, kind: 'helmet' | 'shield', health, material, damageStages }`
 | `mower` | `{ x, width, speed }`, one per row when the level enables mowers |
 | `skySun` | `{ minX, maxX, startY, minLandY, maxLandY, fallSpeed }` |
 | `sunCollectTarget` | where collected sun flies; it is credited on arrival |
+| `daytime` | nocturnal plants sleep on daytime boards |
 | `view` | `{ background, minX, maxX, width, height }`; camera range and background asset id |
 
 ## Levels (`LevelDef`)
@@ -116,11 +145,21 @@ Armor layer: `{ id, kind: 'helmet' | 'shield', health, material, damageStages }`
 | --- | --- |
 | `id`, `era`, `world`, `name`, `label` | `label` is the short name such as `1-1` |
 | `board` | board id |
+| `lanes` | per-row surface override; unsodded rows are `dirt` (1-1 has one grass row, 1-2 and 1-3 three) |
 | `startingSun` | |
-| `seedSelection` | `{ mode: 'choose' \| 'preset', slots, offered, forced, banned }`; `offered` lends plants the profile does not own |
-| `waves` | list of `{ flag?, zombies: [id \| { zombie, row }] }` |
+| `seedSelection` | `{ mode: 'choose' \| 'preset' \| 'conveyor', slots, offered, forced, banned }`; `offered` lends plants the profile does not own; `conveyor` hides the seed bank |
+| `waves` | list of `{ flag?, zombies: [id \| { zombie, row }] }`; ignored when `waveGenerator` is set |
+| `waveGenerator` | `{ waves, flagEvery?, zombies, introduce?, flagZombie? }`; see below |
 | `firstWaveDelay` | seconds before wave 1 (default 18) |
 | `skySun`, `mowers` | booleans |
+| `startingPlants` | `[{ plant, row, col }]` already on the lawn (the Peashooters dug up in 1-5) |
+| `graves` | `{ count, minCol }`: graves placed at random in columns `minCol` and up |
+| `gravesRiseOnFinalWave` | the final wave also sends a zombie out of every grave |
+| `plantableCols` | plants may only go in the first N columns (the bowling line) |
+| `conveyor` | `{ plants: [{ plant, weight }], interval, capacity }` |
+| `mode` | `normal` or `whack` (Whack a Zombie: zombies rise from graves, the cursor is a mallet) |
+| `shovel` | `true` offers the shovel before the profile owns it, `false` hides it; omitted follows the profile |
+| `scripts` | level scripts; see below |
 | `systems` | extra simulation systems: `[{ type, ...params }]` |
 | `music`, `environment` | presentation |
 | `rewards` | list of rewards; the level's campaign node grants them |
@@ -128,7 +167,35 @@ Armor layer: `{ id, kind: 'helmet' | 'shield', health, material, damageStages }`
 
 Wave pacing follows PvZ 1 rules (see COMPATIBILITY.md). A flag wave is preceded by the huge wave warning; the last wave triggers the final wave banner. The level is cleared when every wave has spawned and no zombie is left alive; the reward drops where the last zombie fell and the level is won when the player collects it.
 
-Levels with tutorials, scripted events, objectives (PvZ 2) or generated waves (PvZ 1 Survival and Endless) will add fields as those milestones land: a `scripts` list of triggers and actions, an `objectives` list, and a `waveGenerator` spec. Existing fields will not change meaning.
+### Wave generator
+
+Wave n (from 0) gets a budget of `floor(n / 3) + 1`, multiplied by 2.5 on flag waves (every `flagEvery`, default 10, and the last wave). Flag waves start with `flagZombie`. The first wave holds `introduce` when the level brings in a new zombie. The rest of each budget is spent on `zombies` by `spawn.weight`, skipping types whose `spawn.value` no longer fits. Waves are generated once from the simulation's seed when the level starts, so a replay with the same seed gets the same waves.
+
+### Scripts
+
+```ts
+scripts: [
+  { id: 'intro', when: { on: 'start' }, actions: [{ do: 'hold-waves' }, { do: 'message', text: 'Click the Peashooter packet.' }] },
+  { id: 'planted', when: { on: 'planted', count: 1 }, actions: [{ do: 'release-waves', delay: 20 }] },
+]
+```
+
+Each script runs its actions once, in order, on the first tick its trigger holds.
+
+| Trigger | Holds when |
+| --- | --- |
+| `{ on: 'start' }` | the level starts |
+| `{ on: 'time', at }` | `at` seconds have passed |
+| `{ on: 'planted', count, plant? }` | the player has planted `count` plants (of that id) |
+| `{ on: 'sun-collected', count }` | the player has collected `count` suns |
+| `{ on: 'dug', count }` | the shovel has dug up `count` plants |
+| `{ on: 'killed', count }` | `count` zombies have died |
+| `{ on: 'wave', wave }` | wave `wave` has spawned |
+| `{ on: 'after', script, delay }` | `delay` seconds after another script ran |
+
+Actions: `message` (`text`, `duration`), `hold-waves`, `release-waves` (`delay`), `hold-sky-sun`, `release-sky-sun`, `drop-sun` (`x`), `add-sun` (`amount`), `spawn-zombie` (`zombie`, `row`, `x`), `start-conveyor`, `stop-conveyor`.
+
+PvZ 2 objectives will add an `objectives` list. Existing fields will not change meaning.
 
 ## Worlds (`WorldDef`)
 

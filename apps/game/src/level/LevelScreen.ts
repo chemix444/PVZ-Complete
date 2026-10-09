@@ -92,7 +92,7 @@ export class LevelScreen implements Screen, DevSession {
     this.slots = selection.slots ?? profile.seedSlots;
     this.conveyorLevel = selection.mode === 'conveyor';
     this.whack = this.level.mode === 'whack';
-    this.hasShovel = this.level.shovel === true || profile.features.includes('shovel');
+    this.hasShovel = this.level.shovel ?? profile.features.includes('shovel');
   }
 
   // ---- DevSession ----------------------------------------------------------

@@ -38,7 +38,7 @@ All progress lives in player profiles stored in the browser's IndexedDB. A profi
     peashooter: { source: 'campaign.start', acquiredAt: 1759600000000 },
     sunflower: { source: 'pvz1.day.1', acquiredAt: 1759600100000 },
   },
-  features: [],                     // campaign-gated systems: 'shovel', 'plant-food', ...
+  features: [],                     // campaign-gated systems: 'almanac', 'shovel', 'plant-food', ...
   currencies: { coins: 0 },
   seedSlots: 6,
   pvz1: { adventureCompletions: 0 },
@@ -70,6 +70,7 @@ Normalization (`normalizeProfile`) deep-merges the profile over a freshly create
 
 - New plants, zombies, levels and worlds simply appear as locked or available content.
 - New campaign nodes are evaluated against the saved completions. On load, `CampaignGraph.start()` completes any new `auto` nodes whose requirements are already met and recomputes `campaign.current`.
+- Rewards added to a node after a profile completed it are granted on load: `start()` gives any missing `plant`, `feature` or `note` reward of every completed node. A profile that finished 1-4 before it rewarded the Almanac gets `features: ['almanac']` the next time it loads, with no migration.
 - New settings, currencies, side modes and records fields take their defaults.
 
 Migrations are only for changes defaults cannot express, such as renaming or restructuring a field.

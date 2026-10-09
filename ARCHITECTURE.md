@@ -49,14 +49,18 @@ There is no deep class hierarchy. Each entity kind is a plain class holding data
 | Entity | Notes |
 | --- | --- |
 | `Plant` | Cell, slot (`base`, `main`, `cover`), health, hit span, behaviors, current animation name and start tick. |
-| `Zombie` | Lane, x, speed, body health, armor layers, state (`walking`, `eating`, `dying`, `dead`), behaviors. |
-| `Projectile` | Lane, x, horizontal speed, definition. |
+| `Zombie` | Lane, x, speed, body health, armor layers, state (`walking`, `eating`, `dying`, `dead`), behaviors, status timers (`chillTicks`, `freezeTicks`, `risingTicks`), `hypnotized`, and what it is eating (a plant, or a zombie when hypnosis puts two zombies against each other). |
+| `Projectile` | Lane, x, start x (for range-limited spores), horizontal speed, definition. |
 | `Pickup` | Sun or level reward; falling, resting or collecting. |
 | `LawnMower` | Idle, running or gone. |
+| `GridItem` | Something occupying a cell that is not a plant: `grave` or `crater` (with a countdown). |
+| `Roller` | A bowled nut: lane position, vertical drift while changing lanes, hit count. |
 
 `Lawn` owns grid geometry (cell and row coordinates from the board definition) and per-cell, per-slot occupancy, so lily pads, flower pots and pumpkins fit without new structures.
 
-Grid items, obstacles, vehicles and spawners (graves, ladders, Zomboni ice) are not implemented yet. They will be added as new entity kinds or behaviors when their milestones need them, following the same pattern.
+Graves and craters are grid items. Ladders, Zomboni ice, vases and PvZ 2 tiles will be further grid item kinds or entity kinds when their milestones need them.
+
+Two zombie getters carry most of the rules: `active` (walking or eating and not still climbing out of the ground) and `hostile` (active and not hypnotized). Plants target, mowers start and the house is lost only on hostile zombies.
 
 ### Behaviors
 
@@ -67,13 +71,38 @@ registerPlantBehavior('shooter', (spec) => new ShooterBehavior(spec as ShooterSp
 registerZombieBehavior('eater', (spec) => new EaterBehavior(spec as EaterSpec));
 ```
 
-Built in today: `shooter`, `producer` (plants); `walker`, `eater` (zombies). A plant can list several behaviors and they all run each tick. Behaviors expose `debug()` for the inspector.
+Built in today:
+
+| Plants | |
+| --- | --- |
+| `shooter` | Peashooter, Snow Pea, Repeater (`burst`), Puff-shroom (`range`), Scaredy-shroom (`hideWithin`) |
+| `producer` | Sunflower, Sun-shroom (`growAfter`) |
+| `fume` | Fume-shroom |
+| `explode` | Cherry Bomb, Doom-shroom (`crater`) |
+| `freeze-all` | Ice-shroom |
+| `mine` | Potato Mine |
+| `chomper` | Chomper |
+| `hypnotize` | Hypno-shroom, through the `onBitten` hook that runs when a zombie bites the plant |
+| `grave-buster` | Grave Buster |
+| `bowl` | Wall-nut Bowling nuts; turns the planted nut into a `Roller` |
+
+| Zombies | |
+| --- | --- |
+| `walker` | moves at the zombie's speed times its status factor; hypnotized zombies walk right |
+| `eater` | bites plants, or zombies of the other side when hypnosis is involved |
+| `pole-vault` | runs, vaults the first plant, then hands over to `walker` |
+| `rage` | Newspaper: shock pause and a faster speed when its shield breaks |
+| `dancer`, `dance-step` | Dancing Zombie's moonwalk and summons; every dancer steps and pauses on a shared clock |
+
+A plant or zombie can list several behaviors and they all run each tick. Behaviors expose `debug()` for the inspector. Ticking fuses use the check-then-decrement pattern (`if (fuse > 0) { fuse--; return; }`) so a 1.2 s fuse fires on exactly tick 120.
 
 Zombie behavior order matters where one behavior gates another; `eater` runs before `walker` so a zombie stops on the tick its attack box reaches a plant.
 
 ### Damage
 
-`Simulation.damageZombie()` applies damage through armor layers in order, then the body. A helmet's overflow carries into the body (this is what makes a Conehead take 28 peas). Body thresholds come from data: `loseArmBelow` drops the arm, `dieBelow` drops the head and turns the zombie into a `dying` zombie that keeps walking, keeps absorbing projectiles, is no longer targeted, cannot eat and drains health until it collapses. Plants take damage through `damagePlant()`.
+`Simulation.damageZombie(zombie, amount, kind)` applies damage through armor layers in order, then the body. A helmet's overflow carries into the body (this is what makes a Conehead take 28 peas). Shields depend on the damage kind: `projectile` and `bowling` stop at the shield, `fume` hits shield and body for the full amount, `explosion` and `whack` carry their overflow through, and `lobbed` skips the shield. `damageArea()` hits every non-hypnotized zombie whose body overlaps a box of rows and pixels; explosions, mines, Ice-shroom and fumes use it.
+
+Status effects are tick counters on the zombie. `speedFactor` is 0 while frozen, 0.5 while chilled and 1 otherwise; walking and bite timers scale by it. Body thresholds come from data: `loseArmBelow` drops the arm, `dieBelow` drops the head and turns the zombie into a `dying` zombie that keeps walking, keeps absorbing projectiles, is no longer targeted, cannot eat and drains health until it collapses. Plants take damage through `damagePlant()`.
 
 ### Systems and per-tick order
 
@@ -81,22 +110,30 @@ Each tick runs, in order:
 
 1. queued commands
 2. `SeedBankSystem` (packet recharge)
-3. `SkySunSystem` (if the level has sky sun)
-4. `WaveSystem`
-5. `PlantSystem` (plant behaviors)
-6. `ZombieSystem` (collapse timers, dying drain, zombie behaviors)
-7. `ProjectileSystem` (movement and collision)
-8. `PickupSystem` (falling, expiry, flight to the sun bank)
-9. `MowerSystem`
-10. extra systems from the level's `systems` list (world mechanics)
-11. `OutcomeSystem` (house reached, level cleared)
-12. compaction of dead entities
+3. `ConveyorSystem` (if the level has a conveyor)
+4. `SkySunSystem` (if the level has sky sun)
+5. `ScriptSystem` (if the level has scripts)
+6. `WaveSystem` (written or generated waves; Whack a Zombie and final-wave grave risings)
+7. `GridItemSystem` (crater countdowns)
+8. `PlantSystem` (plant behaviors; sleeping mushrooms skip)
+9. `ZombieSystem` (status timers, rising from the ground, collapse timers, dying drain, zombie behaviors, hypnotized zombies leaving)
+10. `ProjectileSystem` (movement, range, collision, chill)
+11. `RollerSystem` (bowling nuts)
+12. `PickupSystem` (falling, expiry, flight to the sun bank)
+13. `MowerSystem`
+14. extra systems from the level's `systems` list (world mechanics)
+15. `OutcomeSystem` (house reached, level cleared)
+16. compaction of dead entities
 
 World mechanics plug in with `registerSystem(type, factory)` and are switched on per level (or per world) by listing `{ "type": "<id>", ...params }` in `systems`. A world plugin gets the whole `Simulation` and can add entities, read events it emitted, and add behaviors through the registries, so new worlds extend the engine without editing it.
 
+### Level features
+
+Levels switch on optional engine features through data rather than code: a `waveGenerator` (PvZ 1 wave budgets), `graves`, `startingPlants`, `plantableCols` (the bowling line), `conveyor`, `mode: 'whack'`, and `scripts`. Scripts are trigger and action lists run once each by `ScriptSystem`; they hold and release waves and sky sun, show advice, drop sun, spawn zombies and start the conveyor, which is enough for the 1-1 and 1-5 tutorials without special cases in the engine. `sim.counters` (planted, sun collected, dug, killed) feeds their triggers.
+
 ### Events
 
-The simulation never calls presentation code. Everything observable is an event in `sim.drainEvents()`: plants placed or removed, projectiles fired and hits (with the armor material that absorbed them), zombies spawning, starting to eat, losing an arm or head, dying, armor falling off, sun spawned and credited, mowers starting, wave spawned, huge wave warning, final wave, level cleared, won, lost. The game maps events to sounds (`LevelSounds`), particles and debris (`BoardScene.handleEvent`), and banners and flow (`LevelScreen`).
+The simulation never calls presentation code. Everything observable is an event in `sim.drainEvents()`: plants placed or removed, projectiles fired and hits (with the armor material that absorbed them), zombies spawning, starting to eat, losing an arm or head, dying, armor falling off, sun spawned and credited, mowers starting, wave spawned, huge wave warning, final wave, level cleared, won, lost, and the Day and Night additions (explosions, fumes, freezes, hypnosis, vaults, rage, backup dancers, Chomper bites, mines arming, graves, roller hits, conveyor packets, whacks, script messages). The game maps events to sounds (`LevelSounds`), particles and debris (`BoardScene.handleEvent`), and banners and flow (`LevelScreen`).
 
 ## Presentation
 
@@ -112,7 +149,7 @@ If the asset manifest has a clip for `plant.<id>.<anim>` or `zombie.<id>.<anim>`
 
 ### HUD and menus
 
-The in-level HUD (seed bank, sun counter, progress meter, banners, seed chooser) is drawn in Pixi. Menus (profiles, main menu, campaign, almanac, settings, pause and result dialogs) are DOM elements in an overlay that shares the canvas's 800x600 logical coordinate system through the same letterbox transform (`Stage`).
+The in-level HUD (seed bank or conveyor belt, shovel, sun counter, progress meter, banners, message box, seed chooser) is drawn in Pixi. The seed bank, the belt and the shovel share one held-item flow in `LevelScreen` (`hold()` and `drop()`); Whack a Zombie swaps the cursor for the mallet. Menus (profiles, main menu, campaign, almanac, settings, pause and result dialogs) are DOM elements in an overlay that shares the canvas's 800x600 logical coordinate system through the same letterbox transform (`Stage`).
 
 ### Audio
 
@@ -130,9 +167,9 @@ See [CAMPAIGN.md](CAMPAIGN.md) and [SAVE_FORMAT.md](SAVE_FORMAT.md). In short: o
 
 `npm test` runs Vitest in Node with no rendering:
 
-- engine: attack timing, pea release delay, targeting rules, projectile speed and collision, damage and armor, dying zombies, movement, eating, sun production, sky sun timing, collection, seed cooldowns, placement rules, wave pacing and acceleration, huge waves, mowers, losing, winning, determinism, and a scripted player that must win most seeds of the shipped level
+- engine: attack timing, pea release delay, targeting rules, projectile speed and collision, damage and armor, shields and damage kinds, dying zombies, movement, eating, sun production, sky sun timing, collection, seed cooldowns, placement rules, wave pacing and acceleration, generated waves, huge waves, mowers, losing, winning, every Day and Night plant and zombie, graves, sleep, scripts, the conveyor, bowling, whacking, the shovel, determinism, and a scripted player that must win at least 8 of 20 seeds of 1-4
 - content: cross-references, era profiles
-- campaign: requirements, rewards, the PvZ 1 to PvZ 2 hand-off on one profile, side content, broken graph detection
+- campaign: requirements, rewards, reward reconciliation, a full 1-1 to 2-10 run, the PvZ 1 to PvZ 2 hand-off on one profile, side content, broken graph detection
 - save: migrations, normalization, refusal of newer versions, IndexedDB round trips (fake-indexeddb)
 - assets, audio and tools: animation clock, manifest merging, placeholder sound coverage, asset folder scanning
 

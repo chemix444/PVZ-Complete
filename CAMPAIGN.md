@@ -24,6 +24,8 @@ A node is completed, available (all requirements completed, or opened directly b
 
 `plant` adds a plant to the one shared collection (a plant already owned is never granted twice), `feature` turns on a game system for the profile, `currency` adds coins or other currencies, `seed-slot` adds seed bank slots, `note` records a story note. For level nodes the rewards come from the level definition, so the reward a level drops and the reward the campaign records cannot disagree.
 
+Rewards can be added to a node after players have completed it (1-4 started granting the Almanac when the Day area was filled in). `CampaignGraph.start()` runs on every profile load and grants any `plant`, `feature` or `note` reward of a completed node that the profile is missing. Currencies and seed slots are not reconciled, since there is no record of whether they were spent.
+
 ### Continue
 
 After every completion the profile's `campaign.current` is set to the first available, non-auto, non-side node in campaign order. The main menu's Adventure button starts that node's level. Completed levels stay replayable from the Campaign screen; replays count completions but grant nothing new.
@@ -34,13 +36,14 @@ PvZ 2 systems exist in one engine, but the campaign decides when a profile sees 
 
 | Feature | Granted by | Effect |
 | --- | --- | --- |
-| `shovel` | PvZ 1 Day 1-5 | Shovel button in the HUD |
+| `almanac` | PvZ 1 Day 1-4 | Zombie section of the Almanac; the main menu button reads Almanac instead of Plant Collection |
+| `shovel` | PvZ 1 Day 1-5 | Shovel button next to the seed bank in every later level |
 | `plant-food` | `transition.time-travel` | Plant Food drops and the Plant Food button |
 | `world-map` | `transition.time-travel` | PvZ 2 world map navigation |
 | `pvz2-objectives` | first Ancient Egypt level that uses one | Level objective banners and checks |
 | `power-ups` | the PvZ 2 node where they are introduced | Pinch, flick and zap |
 
-Only the mechanism is implemented today (`hasFeature`, `grantReward`); the gated features themselves arrive with their milestones.
+`almanac` and `shovel` are live. A level can also set `shovel: true` to hand out the shovel before the profile owns it (1-5 does, since it teaches it) or `shovel: false` to hide it (Whack a Zombie). The PvZ 2 gates arrive with their milestones.
 
 ## Planned order
 
@@ -85,9 +88,10 @@ The graph test in `packages/campaign/test/graph.test.ts` exercises exactly this 
 
 ## Current content
 
-| Node | Kind | Status |
+| Node | Kind | Rewards |
 | --- | --- | --- |
-| `campaign.start` | start (auto) | grants Peashooter |
-| `pvz1.day.1` | level `pvz1-day-01` | Milestone 1 slice; rewards Sunflower |
+| `campaign.start` | start (auto) | Peashooter |
+| `pvz1.day.1` to `pvz1.day.10` | level (`pvz1-day-01` to `pvz1-day-10`); 1-5 is a `minigame` node (Wall-nut Bowling) | Sunflower, Cherry Bomb, Wall-nut, `almanac`, `shovel` and Potato Mine, Snow Pea, Chomper, Repeater, note `zombie-note-1`, Puff-shroom |
+| `pvz1.night.1` to `pvz1.night.10` | level (`pvz1-night-01` to `pvz1-night-10`), requires `pvz1.day.10`; 2-5 is Whack a Zombie | Sun-shroom, Fume-shroom, Grave Buster, Hypno-shroom, Scaredy-shroom, Ice-shroom, Doom-shroom, nothing, note `zombie-note-2`, nothing |
 
-`pvz1-day-01` is not yet the original 1-1 (see COMPATIBILITY.md). It sits in the 1-1 slot so its completion is stored in the real campaign; Milestone 2 replaces its content with the faithful level without changing the node id.
+Twenty nodes and sixteen plants. `packages/campaign/test/graph.test.ts` plays the whole run on one profile and checks the collection and features at the end. 2-10's original reward, Lily Pad, is added when the Pool area lands; reconciliation then gives it to profiles that already finished Night.

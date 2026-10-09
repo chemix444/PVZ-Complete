@@ -249,6 +249,7 @@ const night: LevelDef[] = [
     name: 'Whack a Zombie',
     music: 'music.minigame',
     mode: 'whack',
+    shovel: false,
     seedSelection: { mode: 'preset', slots: 0 },
     graves: { count: 9, minCol: 3 },
     gravesRiseOnFinalWave: false,

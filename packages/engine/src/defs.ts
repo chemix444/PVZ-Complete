@@ -433,7 +433,7 @@ export interface LevelDef {
   readonly conveyor?: ConveyorSpec;
   /** Gameplay variant; 'whack' spawns zombies from graves and arms the mallet. */
   readonly mode?: 'normal' | 'whack';
-  /** The shovel is available in this level even before the profile owns it. */
+  /** true: the shovel is offered even before the profile owns it. false: never offered here. */
   readonly shovel?: boolean;
   readonly scripts?: readonly ScriptSpec[];
   /** Extra simulation systems (world mechanics) installed for this level. */
