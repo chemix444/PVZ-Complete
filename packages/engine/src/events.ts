@@ -7,10 +7,14 @@ export type PlacementFailure =
   | 'not-enough-sun'
   | 'out-of-bounds'
   | 'surface'
-  | 'occupied';
+  | 'occupied'
+  | 'needs-grave'
+  | 'column';
 
-export type PlantRemoval = 'eaten' | 'dug' | 'debug';
-export type ZombieDeath = 'damage' | 'mower' | 'debug';
+/** used: an instant plant finished its job (exploded, rolled away, ate its grave). */
+export type PlantRemoval = 'eaten' | 'dug' | 'used' | 'debug';
+/** chomp: swallowed whole, no corpse. explosion: burned to ash. */
+export type ZombieDeath = 'damage' | 'explosion' | 'mower' | 'chomp' | 'whack' | 'debug';
 
 // Events are the only channel from the simulation to presentation (audio,
 // particles, UI text). Presentation never feeds anything back except commands.
@@ -46,6 +50,21 @@ export type SimEvent =
   | { type: 'final-wave' }
   | { type: 'level-cleared'; pickupId: number }
   | { type: 'level-won'; rewards: readonly RewardSpec[] }
-  | { type: 'level-lost'; zombieId: number; row: number };
+  | { type: 'level-lost'; zombieId: number; row: number }
+  | { type: 'explosion'; effect: string; x: number; y: number }
+  | { type: 'fume'; plantId: number; row: number; x0: number; x1: number }
+  | { type: 'zombies-frozen' }
+  | { type: 'zombie-hypnotized'; zombieId: number }
+  | { type: 'zombie-vaulted'; zombieId: number }
+  | { type: 'zombie-enraged'; zombieId: number }
+  | { type: 'backup-summoned'; zombieId: number; dancerId: number }
+  | { type: 'chomper-bite'; plantId: number; zombieId: number | null }
+  | { type: 'mine-armed'; plantId: number }
+  | { type: 'grave-spawned'; itemId: number; row: number; col: number }
+  | { type: 'grave-removed'; itemId: number; row: number; col: number }
+  | { type: 'roller-hit'; rollerId: number; zombieId: number; hits: number }
+  | { type: 'conveyor-packet'; packetId: number; plant: string }
+  | { type: 'whack'; x: number; y: number; zombieId: number | null }
+  | { type: 'message'; text: string; duration: number };
 
 export type SimEventType = SimEvent['type'];

@@ -79,6 +79,7 @@ function playBot(sim: Simulation): void {
   const PEA = 0;
   const SUN = 1;
   const NUT = 2;
+  const BOMB = 3;
   const ROWS = [0, 1, 2, 3, 4];
   const countIn = (row: number, id: string) => sim.plants.filter((p) => p.row === row && p.def.id === id).length;
   const sunflowers = () => sim.plants.filter((p) => p.def.id === 'sunflower').length;
@@ -98,10 +99,35 @@ function playBot(sim: Simulation): void {
     return true;
   };
 
+  // Cherry Bomb the cell with the most zombies around it once three are bunched up past mid-lawn.
+  const bombTarget = (): [number, number] | null => {
+    let best: [number, number] | null = null;
+    let most = 2;
+    for (const row of ROWS) {
+      for (let col = 2; col < 7; col++) {
+        const x0 = sim.lawn.cellX(col - 1);
+        const x1 = sim.lawn.cellX(col + 2);
+        const count = sim.zombies.filter((z) => z.hostile && Math.abs(z.row - row) <= 1 && z.hitRight > x0 && z.hitLeft < x1).length;
+        if (count > most && !sim.lawn.plantAt(row, col)) {
+          most = count;
+          best = [row, col];
+        }
+      }
+    }
+    return best;
+  };
+
   while (!sim.finished && sim.tick < 300_000) {
     for (const pickup of sim.pickups) {
       if (pickup.kind === 'sun' && pickup.collectible) sim.issue({ type: 'collect', pickupId: pickup.id });
       if (pickup.kind === 'reward' && pickup.state === 'resting') sim.issue({ type: 'collect', pickupId: pickup.id });
+    }
+    const bomb = sim.seedBank[BOMB].ready && sim.sun >= sim.seedBank[BOMB].cost ? bombTarget() : null;
+    if (bomb) {
+      sim.issue({ type: 'plant', slot: BOMB, row: bomb[0], col: bomb[1] });
+      sim.step();
+      sim.drainEvents();
+      continue;
     }
     const emergency = ROWS.find(
       (row) => zombiesIn(row).some((z) => z.x < 480) && countIn(row, 'peashooter') < needed(row) && countIn(row, 'wall-nut') === 0,
@@ -113,9 +139,12 @@ function playBot(sim: Simulation): void {
     } else if (sunflowers() < 4) want(SUN, ROWS.find((r) => freeCol(r, [0]) !== undefined), [0]);
     else if (want(PEA, ROWS.find((r) => countIn(r, 'peashooter') < 1), [2])) {
       // proactive defense
-    } else if (sunflowers() < 8) want(SUN, ROWS.find((r) => freeCol(r, [0, 1]) !== undefined), [0, 1]);
+    } else if (sunflowers() < 6) want(SUN, ROWS.find((r) => freeCol(r, [0, 1]) !== undefined), [0, 1]);
     else if (want(PEA, ROWS.find((r) => countIn(r, 'peashooter') < 2), [3, 2])) {
       // second column
+    } else if (sunflowers() < 10) want(SUN, ROWS.find((r) => freeCol(r, [0, 1]) !== undefined), [0, 1]);
+    else if (want(PEA, ROWS.find((r) => countIn(r, 'peashooter') < 3), [4])) {
+      // third column
     } else want(NUT, ROWS.find((r) => freeCol(r, [6]) !== undefined), [6]);
     sim.step();
     sim.drainEvents();
@@ -123,41 +152,41 @@ function playBot(sim: Simulation): void {
 }
 
 describe('Full level', () => {
-  it('is won by a straightforward strategy on nearly every seed', async () => {
+  it('Day 1-4 can be won by a simple scripted strategy', async () => {
     const { LevelRegistry, BoardRegistry, contentFor } = await import('@pvz/content');
     const { Simulation } = await import('@pvz/engine');
-    const level = LevelRegistry.get('pvz1-day-01');
-    const total = level.waves.reduce((n, w) => n + w.zombies.length, 0);
+    const level = LevelRegistry.get('pvz1-day-04');
     let wins = 0;
     for (let rngSeed = 1; rngSeed <= 20; rngSeed++) {
       const sim = new Simulation({
         content: contentFor('pvz1'),
         board: BoardRegistry.get(level.board),
         level,
-        seeds: ['peashooter', 'sunflower', 'wall-nut'],
+        seeds: ['peashooter', 'sunflower', 'wall-nut', 'cherry-bomb'],
         rngSeed,
       });
       playBot(sim);
       if (sim.phase === 'won') {
         wins++;
-        expect(sim.stats.zombiesKilled).toBe(total);
+        expect(sim.stats.zombiesKilled).toBe(sim.waves.waves.reduce((n, w) => n + w.zombies.length, 0));
       }
     }
-    // The bot is naive (fixed columns, no sun banking); this guards against the
-    // level becoming unwinnable, not a measure of how hard it is for a person.
-    expect(wins).toBeGreaterThanOrEqual(15);
+    // The bot is naive: it stops building Sunflowers early and loses to 1-4's
+    // final wave about half the time. This guards against the level becoming
+    // unwinnable; it is not a measure of how hard the level is for a person.
+    expect(wins).toBeGreaterThanOrEqual(8);
   });
 
   it('replays identically from the same seed and inputs', async () => {
     const { LevelRegistry, BoardRegistry, contentFor } = await import('@pvz/content');
     const { Simulation } = await import('@pvz/engine');
-    const level = LevelRegistry.get('pvz1-day-01');
+    const level = LevelRegistry.get('pvz1-day-04');
     const play = (rngSeed: number) => {
       const sim = new Simulation({
         content: contentFor('pvz1'),
         board: BoardRegistry.get(level.board),
         level,
-        seeds: ['peashooter', 'sunflower', 'wall-nut'],
+        seeds: ['peashooter', 'sunflower', 'wall-nut', 'cherry-bomb'],
         rngSeed,
       });
       const hashes: string[] = [];

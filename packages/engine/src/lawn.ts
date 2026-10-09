@@ -1,5 +1,5 @@
 import type { BoardDef, PlantSlot, SurfaceType } from './defs';
-import type { Plant } from './entities';
+import type { GridItem, Plant } from './entities';
 
 const SLOTS: readonly PlantSlot[] = ['base', 'main', 'cover'];
 
@@ -8,11 +8,19 @@ export class Lawn {
   readonly rows: number;
   readonly cols: number;
   private readonly occupancy: (Plant | null)[];
+  private readonly items: (GridItem | null)[];
+  private readonly lanes: readonly SurfaceType[];
 
-  constructor(readonly def: BoardDef) {
+  /** `lanes` overrides the board's row surfaces (unsodded rows in early levels). */
+  constructor(
+    readonly def: BoardDef,
+    lanes?: readonly SurfaceType[],
+  ) {
     this.rows = def.rows;
     this.cols = def.cols;
+    this.lanes = lanes ?? def.lanes;
     this.occupancy = new Array(def.rows * def.cols * SLOTS.length).fill(null);
+    this.items = new Array(def.rows * def.cols).fill(null);
   }
 
   inBounds(row: number, col: number): boolean {
@@ -20,7 +28,7 @@ export class Lawn {
   }
 
   surface(row: number, col: number): SurfaceType {
-    return this.def.cellOverrides?.[`${row},${col}`] ?? this.def.lanes[row] ?? 'none';
+    return this.def.cellOverrides?.[`${row},${col}`] ?? this.lanes[row] ?? 'none';
   }
 
   cellX(col: number): number {
@@ -54,6 +62,25 @@ export class Lawn {
       if (plant) return plant;
     }
     return null;
+  }
+
+  /** Rows zombies walk in and mowers guard. */
+  isLane(row: number): boolean {
+    const surface = this.lanes[row];
+    return surface === 'grass' || surface === 'water' || surface === 'roof';
+  }
+
+  itemAt(row: number, col: number): GridItem | null {
+    return this.items[row * this.cols + col];
+  }
+
+  placeItem(item: GridItem): void {
+    this.items[item.row * this.cols + item.col] = item;
+  }
+
+  removeItem(item: GridItem): void {
+    const index = item.row * this.cols + item.col;
+    if (this.items[index] === item) this.items[index] = null;
   }
 
   occupy(plant: Plant): void {

@@ -107,9 +107,19 @@ export class CampaignGraph {
     return null;
   }
 
-  /** Brings a new (or newly migrated) profile up to date with auto nodes. */
+  /**
+   * Brings a profile up to date with the current content: completes newly
+   * reachable auto nodes and grants plants, features and notes that completed
+   * nodes gained after the profile completed them.
+   */
   start(profile: PlayerProfile, now: number): string[] {
     const completed = this.resolveAuto(profile, now);
+    for (const node of this.order) {
+      if (!this.isCompleted(profile, node.id)) continue;
+      for (const reward of node.rewards ?? []) {
+        if (reward.type === 'plant' || reward.type === 'feature' || reward.type === 'note') grantReward(profile, reward, node.id, now);
+      }
+    }
     profile.campaign.current = this.nextMainline(profile)?.id ?? null;
     return completed;
   }

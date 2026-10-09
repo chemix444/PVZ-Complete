@@ -5,6 +5,8 @@ import type { Simulation } from '../simulation';
 export interface PlantBehavior {
   readonly type: string;
   update(sim: Simulation, plant: Plant): void;
+  /** Called when a zombie bites the plant; returning true consumes the bite (Hypno-shroom). */
+  onBitten?(sim: Simulation, plant: Plant, zombie: Zombie): boolean;
   /** Snapshot for the inspector and debug overlays. */
   debug?(): Record<string, unknown>;
 }

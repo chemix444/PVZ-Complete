@@ -82,11 +82,37 @@ describe('CampaignGraph', () => {
     ).toThrow(/cycle/);
   });
 
+  it('grants rewards that content added to nodes the profile had already completed', () => {
+    const profile = createProfile('Tester', 0);
+    new CampaignGraph(nodes).start(profile, 0);
+    new CampaignGraph(nodes).complete(profile, 'pvz1.a', 1);
+    const updated = nodes.map((n) => (n.id === 'pvz1.a' ? { ...n, rewards: [...(n.rewards ?? []), { type: 'plant' as const, id: 'lily-pad' }] } : n));
+    new CampaignGraph(updated).start(profile, 2);
+    expect(profile.plants['lily-pad']).toEqual({ source: 'pvz1.a', acquiredAt: 2 });
+  });
+
   it('does not grant a second copy of an owned plant', () => {
     const profile = createProfile('Tester', 0);
     expect(grantReward(profile, { type: 'plant', id: 'peashooter' }, 'a', 1)).toBe(true);
     expect(grantReward(profile, { type: 'plant', id: 'peashooter' }, 'b', 2)).toBe(false);
     expect(profile.plants.peashooter.source).toBe('a');
+  });
+
+  it('runs the shipped campaign from 1-1 through 2-10 in order', () => {
+    const graph = new CampaignGraph(CampaignRegistry.all());
+    const profile = createProfile('Tester', 0);
+    graph.start(profile, 0);
+    const visited: string[] = [];
+    while (profile.campaign.current) {
+      visited.push(profile.campaign.current);
+      graph.complete(profile, profile.campaign.current, visited.length);
+    }
+    expect(visited[0]).toBe('pvz1.day.1');
+    expect(visited[9]).toBe('pvz1.day.10');
+    expect(visited[10]).toBe('pvz1.night.1');
+    expect(visited).toHaveLength(20);
+    expect(Object.keys(profile.plants)).toHaveLength(16);
+    expect(profile.features).toEqual(['almanac', 'shovel']);
   });
 
   it('builds the shipped campaign: new profile owns Peashooter and continues at 1-1', () => {

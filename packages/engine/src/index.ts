@@ -9,9 +9,30 @@ export * from './entities';
 export * from './behaviors/types';
 export { ShooterBehavior, findLaneTarget } from './behaviors/shooter';
 export { ProducerBehavior } from './behaviors/producer';
-export { WalkerBehavior, EaterBehavior, findPlantToEat } from './behaviors/zombie';
+export {
+  BowlBehavior,
+  ChomperBehavior,
+  ExplodeBehavior,
+  FreezeAllBehavior,
+  FumeBehavior,
+  GraveBusterBehavior,
+  HypnotizeBehavior,
+  MineBehavior,
+} from './behaviors/special';
+export {
+  WalkerBehavior,
+  EaterBehavior,
+  PoleVaultBehavior,
+  RageBehavior,
+  DancerBehavior,
+  DanceStepBehavior,
+  attackSpan,
+  findPlantToEat,
+} from './behaviors/zombie';
 export * from './systems/types';
 export { SeedPacket } from './systems/seedBank';
+export { ConveyorPacket, ConveyorSystem } from './systems/conveyor';
+export { ScriptSystem, type ScriptCounters } from './systems/scripts';
 export * from './systems/skySun';
 export * from './systems/waves';
 export * from './simulation';

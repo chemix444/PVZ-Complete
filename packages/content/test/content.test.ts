@@ -43,7 +43,14 @@ describe('Content registries', () => {
     expect(playableLevel('pvz1-day-01')).toBe(LevelRegistry.get('pvz1-day-01'));
   });
 
-  it('lists the zombies a level can spawn', () => {
-    expect(levelZombieTypes(LevelRegistry.get('pvz1-day-01'))).toEqual(['basic', 'conehead', 'flag']);
+  it('lists the zombies a level can spawn, including summoned ones', () => {
+    expect(levelZombieTypes(LevelRegistry.get('pvz1-day-01'))).toEqual(['basic', 'flag']);
+    expect(levelZombieTypes(LevelRegistry.get('pvz1-day-06'))).toEqual(['pole-vaulting', 'basic', 'conehead', 'flag']);
+    expect(levelZombieTypes(LevelRegistry.get('pvz1-night-08'))).toContain('backup-dancer');
+  });
+
+  it('defines all twenty Day and Night levels in campaign order', () => {
+    const labels = LevelRegistry.all().map((level) => level.label);
+    expect(labels).toEqual([...Array.from({ length: 10 }, (_, i) => `1-${i + 1}`), ...Array.from({ length: 10 }, (_, i) => `2-${i + 1}`)]);
   });
 });

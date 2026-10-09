@@ -12,13 +12,15 @@ export class SkySunSystem implements SimSystem {
   readonly id = 'sky-sun';
   fallen = 0;
   countdown: number;
+  /** Paused by level scripts. */
+  held = false;
 
   constructor(sim: Simulation) {
     this.countdown = this.nextDelay(sim);
   }
 
   update(sim: Simulation): void {
-    if (sim.phase !== 'playing') return;
+    if (sim.phase !== 'playing' || this.held) return;
     if (--this.countdown > 0) return;
     sim.spawnSkySun();
     this.fallen++;

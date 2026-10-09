@@ -8,14 +8,24 @@ function levelNode(id: string, levelId: string, requires: string[]): CampaignNod
   const level = levels.get(levelId) as LevelDef;
   return {
     id,
-    kind: 'level',
+    kind: level.conveyor && level.plantableCols ? 'minigame' : 'level',
     era: level.era,
-    title: `Level ${level.label}`,
+    title: `Level ${level.label}${level.name === 'Day' || level.name === 'Night' ? '' : `: ${level.name}`}`,
     world: level.world,
     level: levelId,
     requires,
     rewards: level.rewards,
   };
+}
+
+/** Ten nodes in a row, each requiring the one before. */
+function area(prefix: string, levelPrefix: string, first: string): CampaignNodeDef[] {
+  const nodes: CampaignNodeDef[] = [];
+  for (let i = 1; i <= 10; i++) {
+    const previous = i === 1 ? first : `${prefix}.${i - 1}`;
+    nodes.push(levelNode(`${prefix}.${i}`, `${levelPrefix}-${String(i).padStart(2, '0')}`, [previous]));
+  }
+  return nodes;
 }
 
 // Campaign order: PvZ 1 Day, Night, Pool, Fog, Roof, finale and postgame,
@@ -31,5 +41,6 @@ export const campaignNodes: CampaignNodeDef[] = [
     auto: true,
     rewards: [{ type: 'plant', id: 'peashooter' }],
   },
-  levelNode('pvz1.day.1', 'pvz1-day-01', ['campaign.start']),
+  ...area('pvz1.day', 'pvz1-day', 'campaign.start'),
+  ...area('pvz1.night', 'pvz1-night', 'pvz1.day.10'),
 ];

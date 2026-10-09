@@ -78,10 +78,38 @@ export function playableLevel(id: string): LevelDef {
 /** Zombie types that can appear in a level, in first-appearance order. */
 export function levelZombieTypes(level: LevelDef): string[] {
   const ids = new Set<string>();
-  for (const wave of level.waves) {
-    for (const entry of wave.zombies) ids.add(typeof entry === 'string' ? entry : entry.zombie);
+  const generator = level.waveGenerator;
+  if (generator) {
+    if (generator.introduce) ids.add(generator.introduce);
+    for (const id of generator.zombies) ids.add(id);
+    if (generator.flagZombie) ids.add(generator.flagZombie);
+  } else {
+    for (const wave of level.waves) {
+      for (const entry of wave.zombies) ids.add(typeof entry === 'string' ? entry : entry.zombie);
+    }
   }
-  return [...ids];
+  for (const script of level.scripts ?? []) {
+    for (const action of script.actions) if (action.do === 'spawn-zombie') ids.add(action.zombie);
+  }
+  const summoned = new Set<string>();
+  for (const id of ids) {
+    for (const behavior of ZombieRegistry.find(id)?.behaviors ?? []) {
+      if (behavior.type === 'dancer') summoned.add(String(behavior.backup));
+    }
+  }
+  return [...ids, ...[...summoned].filter((id) => !ids.has(id))];
+}
+
+/** Plants a level lends or hands out regardless of the profile's collection. */
+export function levelPlantIds(level: LevelDef): string[] {
+  const selection = level.seedSelection;
+  return [
+    ...(selection.offered ?? []),
+    ...(selection.forced ?? []),
+    ...(selection.banned ?? []),
+    ...(level.conveyor?.plants.map((p) => p.plant) ?? []),
+    ...(level.startingPlants?.map((p) => p.plant) ?? []),
+  ];
 }
 
 /** Cross-reference check over every registry. Returns human-readable problems. */
@@ -101,6 +129,9 @@ export function validateContent(): string[] {
   for (const zombie of ZombieRegistry.all()) {
     for (const behavior of zombie.behaviors) {
       if (!zombieTypes.has(behavior.type)) problems.push(`zombie ${zombie.id}: unknown behavior ${behavior.type}`);
+      if (behavior.type === 'dancer' && !ZombieRegistry.has(String(behavior.backup))) {
+        problems.push(`zombie ${zombie.id}: unknown backup ${String(behavior.backup)}`);
+      }
     }
   }
   for (const level of LevelRegistry.all()) {
@@ -109,10 +140,10 @@ export function validateContent(): string[] {
     for (const id of levelZombieTypes(level)) {
       if (!ZombieRegistry.has(id)) problems.push(`level ${level.id}: unknown zombie ${id}`);
     }
-    const selection = level.seedSelection;
-    for (const id of [...(selection.offered ?? []), ...(selection.forced ?? []), ...(selection.banned ?? [])]) {
+    for (const id of levelPlantIds(level)) {
       if (!PlantRegistry.has(id)) problems.push(`level ${level.id}: unknown plant ${id}`);
     }
+    if (level.seedSelection.mode === 'conveyor' && !level.conveyor) problems.push(`level ${level.id}: conveyor mode without a conveyor`);
     for (const reward of level.rewards ?? []) {
       if (reward.type === 'plant' && !PlantRegistry.has(reward.id ?? '')) {
         problems.push(`level ${level.id}: reward plant ${reward.id} does not exist`);

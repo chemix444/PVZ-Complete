@@ -1,7 +1,10 @@
-import { BoardRegistry, contentFor, LevelRegistry } from '@pvz/content';
+import { BoardRegistry, contentFor } from '@pvz/content';
 import { Simulation, type Command, type LevelDef, type SimEvent, type WaveSpec } from '@pvz/engine';
 
 export interface TestLevelOptions {
+  board?: string;
+  /** Any other level fields to override. */
+  level?: Partial<LevelDef>;
   waves?: WaveSpec[];
   seeds?: string[];
   skySun?: boolean;
@@ -15,17 +18,23 @@ export interface TestLevelOptions {
 // waves the test level gets one wave that never arrives.
 const NEVER = 1e6;
 
-/** A PvZ 1 day lawn with sky sun, waves and mowers off unless asked for. */
+/** A plain five-lane PvZ 1 lawn with sky sun, waves and mowers off unless asked for. */
 export function makeSim(options: TestLevelOptions = {}): Simulation {
-  const base = LevelRegistry.get('pvz1-day-01');
   const level: LevelDef = {
-    ...base,
     id: 'test-level',
+    era: 'pvz1',
+    world: 'pvz1-day',
+    name: 'Test',
+    label: 'T',
+    board: options.board ?? 'pvz1-day',
     startingSun: options.sun ?? 5000,
+    seedSelection: { mode: 'choose', slots: 6 },
     waves: options.waves ?? [{ zombies: ['basic'] }],
+    firstWaveDelay: options.firstWaveDelay ?? (options.waves ? 18 : NEVER),
     skySun: options.skySun ?? false,
     mowers: options.mowers ?? false,
-    firstWaveDelay: options.firstWaveDelay ?? (options.waves ? base.firstWaveDelay : NEVER),
+    rewards: [{ type: 'plant', id: 'sunflower' }],
+    ...options.level,
   };
   return new Simulation({
     content: contentFor('pvz1'),
