@@ -1,18 +1,41 @@
-import { ColorMatrixFilter, Container, Graphics } from 'pixi.js';
+import { ColorMatrixFilter, Container, Graphics, Text } from 'pixi.js';
 import {
+  craterArt,
+  graveArt,
   lawnMowerArt,
   moneyBagArt,
   peaArt,
   plantArt,
+  snowPeaArt,
+  sporeArt,
   sunArt,
-  zombieArt,
+  zombieArtFor,
   type AssetLibrary,
   type PlantArt,
   type SunArt,
   type ZombieArt,
 } from '@pvz/assets';
 import { PlantRegistry } from '@pvz/content';
-import { ShooterBehavior, type LawnMower, type Pickup, type Plant, type Projectile, type Simulation, type Zombie } from '@pvz/engine';
+import {
+  ChomperBehavior,
+  ExplodeBehavior,
+  FreezeAllBehavior,
+  FumeBehavior,
+  GraveBusterBehavior,
+  MineBehavior,
+  ProducerBehavior,
+  RageBehavior,
+  ShooterBehavior,
+  ZOMBIE_RISE_TICKS,
+  type GridItem,
+  type LawnMower,
+  type Pickup,
+  type Plant,
+  type Projectile,
+  type Roller,
+  type Simulation,
+  type Zombie,
+} from '@pvz/engine';
 import { ClipVisual } from './clip';
 import { SeedPacketView } from './packet';
 
@@ -35,6 +58,7 @@ export class PlantView {
   private readonly clip: ClipVisual | null = null;
   private readonly phase = Math.random() * Math.PI * 2;
   private readonly bornAt: number;
+  private readonly zzz: Text | null = null;
 
   constructor(plant: Plant, assets: AssetLibrary, now: number) {
     this.bornAt = now;
@@ -44,9 +68,14 @@ export class PlantView {
     if (ClipVisual.available(assets, prefix, ['idle'])) {
       this.clip = new ClipVisual(assets, prefix, ['idle']);
       this.root.addChild(this.clip.root);
-    } else {
-      this.art = plantArt(plant.def.id, plant.def.name);
-      this.root.addChild(this.art.root);
+      return;
+    }
+    this.art = plantArt(plant.def.id, plant.def.name);
+    this.root.addChild(this.art.root);
+    if (plant.def.nocturnal) {
+      this.zzz = new Text({ text: 'z', style: { fontFamily: 'Trebuchet MS', fontSize: 16, fontWeight: 'bold', fill: 0xe8e8ff, stroke: { color: 0x202040, width: 3 } } });
+      this.zzz.position.set(52, 30);
+      this.root.addChild(this.zzz);
     }
   }
 
@@ -59,21 +88,51 @@ export class PlantView {
       return;
     }
     const art = this.art!;
+    const parts = art.parts ?? {};
     const head = art.head;
-    head.rotation = Math.sin(now * 2.2 + this.phase) * 0.04;
+    head.rotation = plant.sleeping ? Math.sin(now * 1.2 + this.phase) * 0.02 : Math.sin(now * 2.2 + this.phase) * 0.04;
     head.scale.set(1);
     head.position.set(head.pivot.x, head.pivot.y);
 
-    if (plant.anim === 'attack') {
-      const shooter = plant.behaviors.find((b): b is ShooterBehavior => b instanceof ShooterBehavior);
-      const p = shooter ? (sinceAnim * 100) / shooter.fireDelay : 2;
-      if (p < 1) {
-        head.position.x -= 5 * p;
-        head.scale.set(1 - 0.08 * p, 1 + 0.06 * p);
-      } else if (p < 1.4) {
-        const q = 1 - (p - 1) / 0.4;
-        head.position.x += 4 * q;
-        head.scale.set(1 + 0.08 * q, 1 - 0.05 * q);
+    if (parts.eyes) parts.eyes.visible = !plant.sleeping;
+    if (parts.sleepEyes) parts.sleepEyes.visible = plant.sleeping;
+    if (this.zzz) {
+      this.zzz.visible = plant.sleeping;
+      const cycle = (now * 0.6 + this.phase) % 1;
+      this.zzz.position.set(52 + cycle * 10, 34 - cycle * 24);
+      this.zzz.alpha = 1 - cycle;
+      this.zzz.text = cycle < 0.5 ? 'z' : 'Z';
+    }
+
+    for (const behavior of plant.behaviors) {
+      if (behavior instanceof ShooterBehavior) this.animateShooter(behavior, plant, head, sinceAnim);
+      else if (behavior instanceof MineBehavior) {
+        const armed = behavior.armed;
+        if (parts.armed) parts.armed.visible = armed;
+        if (parts.unarmed) parts.unarmed.visible = !armed;
+        if (parts.light) parts.light.alpha = armed && Math.floor(now * 3) % 2 === 0 ? 1 : 0.35;
+        if (armed && plant.anim === 'armed' && sinceAnim < 0.3) head.scale.set(1, 0.5 + (sinceAnim / 0.3) * 0.5);
+      } else if (behavior instanceof ChomperBehavior) {
+        const jaw = parts.jaw;
+        if (!jaw) continue;
+        if (behavior.state === 'biting') jaw.rotation = Math.min(0.55, sinceAnim * 1.2);
+        else if (behavior.state === 'chewing') {
+          jaw.rotation = 0.04 + Math.abs(Math.sin(now * 5)) * 0.06;
+          head.scale.set(1 + Math.sin(now * 5) * 0.04);
+        } else jaw.rotation = 0.08 + Math.sin(now * 2 + this.phase) * 0.05;
+      } else if (behavior instanceof ExplodeBehavior || behavior instanceof FreezeAllBehavior) {
+        const swell = 1 + Math.min(1, sinceAnim / 1.2) * 0.35;
+        head.scale.set(swell);
+        head.position.x += Math.sin(now * 60) * sinceAnim * 2;
+      } else if (behavior instanceof ProducerBehavior && behavior.growIn !== -1) {
+        head.scale.set(0.6);
+      } else if (behavior instanceof GraveBusterBehavior) {
+        head.position.y += Math.abs(Math.sin(now * 14)) * 3;
+        head.rotation = Math.sin(now * 14) * 0.08;
+      } else if (behavior instanceof FumeBehavior && plant.anim === 'attack') {
+        const p = sinceAnim / 0.5;
+        if (p < 1) head.scale.set(1 + 0.08 * p, 1 - 0.06 * p);
+        else if (p < 1.4) head.scale.set(1 - 0.08 * (1.4 - p), 1);
       }
     }
     if (art.glow) {
@@ -86,6 +145,23 @@ export class PlantView {
     }
   }
 
+  private animateShooter(shooter: ShooterBehavior, plant: Plant, head: Container, sinceAnim: number): void {
+    if (shooter.hiding) {
+      head.scale.set(1.1, 0.45);
+      return;
+    }
+    if (plant.anim !== 'attack') return;
+    const p = (sinceAnim * 100) / shooter.fireDelay;
+    if (p < 1) {
+      head.position.x -= 5 * p;
+      head.scale.set(1 - 0.08 * p, 1 + 0.06 * p);
+    } else if (p < 1.4) {
+      const q = 1 - (p - 1) / 0.4;
+      head.position.x += 4 * q;
+      head.scale.set(1 + 0.08 * q, 1 - 0.05 * q);
+    }
+  }
+
   destroy(): void {
     this.root.destroy({ children: true });
   }
@@ -95,6 +171,7 @@ export class ZombieView {
   readonly root = new Container();
   private readonly art: ZombieArt | null = null;
   private readonly clip: ClipVisual | null = null;
+  private readonly ground = new Graphics();
   private flashUntil = 0;
 
   constructor(zombie: Zombie, assets: AssetLibrary) {
@@ -103,9 +180,11 @@ export class ZombieView {
       this.clip = new ClipVisual(assets, prefix, ['walk', 'idle']);
       this.root.addChild(this.clip.root);
     } else {
-      this.art = zombieArt({ armor: zombie.def.armor?.map((a) => a.id), flag: zombie.def.tags.includes('flag') });
+      this.art = zombieArtFor(zombie.def.id);
       this.root.addChild(this.art.root);
     }
+    // Clips the zombie at ground level while it climbs out of the earth.
+    this.ground.rect(-60, -200, 240, 300).fill(0xffffff);
   }
 
   flash(now: number): void {
@@ -117,6 +196,15 @@ export class ZombieView {
     this.root.position.set(x, zombie.y);
     this.root.zIndex = zombie.row * 100 + Z_ZOMBIE;
     this.root.filters = now < this.flashUntil ? [hitFlash] : null;
+    this.root.tint = zombie.freezeTicks > 0 ? 0xbfe6ff : zombie.chillTicks > 0 ? 0x8fc4ff : zombie.hypnotized ? 0xe0a0ff : 0xffffff;
+    const rising = zombie.risingTicks > 0;
+    if (rising && !this.root.mask) {
+      this.root.addChild(this.ground);
+      this.root.mask = this.ground;
+    } else if (!rising && this.root.mask) {
+      this.root.mask = null;
+      this.ground.removeFromParent();
+    }
     const sinceAnim = (sim.tick + alpha - zombie.animTick) / 100;
     if (this.clip) {
       this.clip.show(zombie.anim, zombie.anim === 'walk' ? now : sinceAnim);
@@ -124,8 +212,10 @@ export class ZombieView {
       return;
     }
     const art = this.art!;
+    const body = art.body;
     art.head.visible = !zombie.headLost;
     art.armFront.visible = !zombie.armLost;
+    art.head.tint = 0xffffff;
     for (const layer of zombie.armor) {
       const stages = art.armor[layer.spec.id];
       if (!stages) continue;
@@ -134,29 +224,71 @@ export class ZombieView {
       const stage = (layer.spec.damageStages ?? []).filter((s) => fraction < s).length;
       stages.forEach((c, i) => (c.visible = i === Math.min(stage, stages.length - 1)));
     }
+    if (art.pole) art.pole.visible = zombie.anim === 'run' || zombie.anim === 'vault';
 
-    const body = art.body;
     body.rotation = 0;
     body.scale.set(1);
     body.position.set(body.pivot.x, body.pivot.y);
+    art.root.scale.x = 1;
+    art.root.x = 0;
     this.root.alpha = 1;
+    // Hypnotized zombies and moonwalkers face right.
+    if (zombie.hypnotized || zombie.anim === 'moonwalk') {
+      art.root.scale.x = -1;
+      art.root.x = (zombie.def.hitbox.left + zombie.def.hitbox.width / 2) * 2;
+    }
+    if (rising) body.position.y += 100 * (zombie.risingTicks / ZOMBIE_RISE_TICKS) - Math.sin(now * 30) * 1.5;
+    const frozen = zombie.freezeTicks > 0;
+    const clock = frozen ? 0 : now;
 
     switch (zombie.state) {
       case 'walking':
       case 'dying': {
-        const phase = x * 0.11;
+        if (rising) {
+          art.armFront.rotation = -1.4 + Math.sin(clock * 8) * 0.2;
+          art.armBack.rotation = -1.2;
+          break;
+        }
+        if (zombie.anim === 'vault') {
+          const t = Math.min(1, sinceAnim / 0.9);
+          body.position.y -= Math.sin(Math.PI * t) * 70;
+          body.rotation = -0.4 * Math.sin(Math.PI * t);
+          if (art.pole) art.pole.rotation = -1.2 * t;
+          break;
+        }
+        if (zombie.anim === 'summon') {
+          art.armFront.rotation = -2.4;
+          art.armBack.rotation = -2.2;
+          body.position.y -= Math.abs(Math.sin(clock * 6)) * 3;
+          break;
+        }
+        if (zombie.anim === 'shock') {
+          art.head.position.x = art.head.pivot.x + Math.sin(clock * 50) * 2;
+          art.armFront.rotation = -1.6;
+          break;
+        }
+        const running = zombie.anim === 'run' || zombie.anim === 'moonwalk';
+        const phase = (zombie.hypnotized ? -x : x) * (running ? 0.07 : 0.11) + (zombie.anim === 'moonwalk' ? clock * 6 : 0);
         const swing = Math.sin(phase);
-        art.legFront.rotation = swing * 0.35;
-        art.legBack.rotation = -swing * 0.35;
-        body.position.y -= Math.abs(Math.cos(phase)) * 2;
+        const stride = running ? 0.55 : 0.35;
+        art.legFront.rotation = swing * stride;
+        art.legBack.rotation = -swing * stride;
+        body.position.y -= Math.abs(Math.cos(phase)) * (running ? 4 : 2);
+        if (zombie.anim === 'run') body.rotation = -0.12;
         art.armFront.rotation = -0.1 + swing * 0.12;
         art.armBack.rotation = -0.1 - swing * 0.12;
         art.head.rotation = Math.sin(phase * 0.5) * 0.06;
+        if (zombie.locked && zombie.anim === 'walk') {
+          // Dance pause: arms up, hips sway.
+          art.armFront.rotation = -2 + Math.sin(clock * 8) * 0.3;
+          art.armBack.rotation = -2 - Math.sin(clock * 8) * 0.3;
+          body.rotation = Math.sin(clock * 8) * 0.06;
+        }
         if (zombie.state === 'dying') body.rotation = -0.08 + Math.sin(phase * 0.5) * 0.08;
         break;
       }
       case 'eating': {
-        const chew = Math.sin(now * 15);
+        const chew = Math.sin(clock * 15);
         art.legFront.rotation = 0.1;
         art.legBack.rotation = -0.1;
         art.head.rotation = 0.1 + chew * 0.12;
@@ -166,9 +298,16 @@ export class ZombieView {
         break;
       }
       case 'dead': {
-        if (zombie.deathCause === 'mower') {
+        if (zombie.deathCause === 'chomp') {
+          this.root.alpha = 0;
+        } else if (zombie.deathCause === 'mower') {
           body.scale.set(1 + sinceAnim * 1.5, Math.max(0.1, 1 - sinceAnim * 2.5));
           this.root.alpha = Math.max(0, 1 - sinceAnim / 0.6);
+        } else if (zombie.deathCause === 'explosion') {
+          this.root.tint = 0x2a2a2a;
+          art.head.visible = true;
+          body.scale.set(1, Math.max(0.05, 1 - Math.max(0, sinceAnim - 0.5) * 1.6));
+          this.root.alpha = Math.max(0, 1 - Math.max(0, sinceAnim - 0.6) / 0.6);
         } else {
           const fall = Math.min(1, sinceAnim / 0.7);
           body.rotation = fall * fall * 1.45;
@@ -178,6 +317,9 @@ export class ZombieView {
         break;
       }
     }
+    for (const behavior of zombie.behaviors) {
+      if (behavior instanceof RageBehavior && behavior.phase === 'angry') art.head.tint = 0xff8a7a;
+    }
   }
 
   destroy(): void {
@@ -185,13 +327,64 @@ export class ZombieView {
   }
 }
 
+export class RollerView {
+  readonly root = new Container();
+  private readonly art: PlantArt;
+
+  constructor(roller: Roller) {
+    this.art = plantArt(roller.def.id, roller.def.name);
+    // Wall-nut art is centered near (40, 58) in cell space.
+    this.art.root.pivot.set(40, 58);
+    this.root.addChild(this.art.root);
+  }
+
+  update(roller: Roller, alpha: number): void {
+    const x = lerp(roller.prevX, roller.x, alpha);
+    const y = lerp(roller.prevY, roller.y, alpha);
+    this.root.position.set(x, y);
+    this.root.zIndex = Math.floor((y - 80) / 100) * 100 + Z_PROJECTILE;
+    this.art.root.rotation = x / 30;
+  }
+
+  destroy(): void {
+    this.root.destroy({ children: true });
+  }
+}
+
+export class GridItemView {
+  readonly root = new Container();
+
+  constructor(item: GridItem, x: number, y: number) {
+    this.root.addChild(item.kind === 'grave' ? graveArt(item.variant) : craterArt());
+    this.root.position.set(x, y);
+    this.root.zIndex = item.row * 100 + 5;
+  }
+
+  update(item: GridItem): void {
+    // Craters fade out over their last 10 seconds.
+    this.root.alpha = item.kind === 'crater' && item.ticksLeft > 0 ? Math.min(1, item.ticksLeft / 1000) : 1;
+  }
+
+  destroy(): void {
+    this.root.destroy({ children: true });
+  }
+}
+
+/** Placeholder art per projectile id. */
+const projectileArt: Record<string, () => Graphics> = {
+  pea: peaArt,
+  'snow-pea': snowPeaArt,
+  spore: sporeArt,
+  'scaredy-spore': sporeArt,
+};
+
 export class ProjectileView {
   readonly root = new Container();
 
   constructor(projectile: Projectile, rowTop: number) {
     const shadow = new Graphics().ellipse(0, 0, 9, 3).fill({ color: 0x000000, alpha: 0.25 });
     shadow.position.set(0, rowTop + 95 - projectile.y);
-    const art = peaArt();
+    const art = (projectileArt[projectile.def.id] ?? peaArt)();
     this.root.addChild(shadow, art);
     this.root.zIndex = projectile.row * 100 + Z_PROJECTILE;
   }

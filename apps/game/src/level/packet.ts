@@ -20,7 +20,10 @@ export class SeedPacketView extends Container {
   private readonly frame = new Graphics();
   private lastCharge = -1;
 
-  constructor(readonly def: PlantDef) {
+  constructor(
+    readonly def: PlantDef,
+    showCost = true,
+  ) {
     super();
     const card = new Graphics()
       .roundRect(0, 0, PACKET_WIDTH, PACKET_HEIGHT, 5)
@@ -43,6 +46,7 @@ export class SeedPacketView extends Container {
     });
     cost.anchor.set(0.5);
     cost.position.set(PACKET_WIDTH / 2, 61);
+    cost.visible = showCost;
     this.dim.roundRect(0, 0, PACKET_WIDTH, PACKET_HEIGHT, 5).fill({ color: 0x000000, alpha: 0.4 });
     this.frame.roundRect(-2, -2, PACKET_WIDTH + 4, PACKET_HEIGHT + 4, 6).stroke({ width: 3, color: 0xffe14d });
     this.frame.visible = false;

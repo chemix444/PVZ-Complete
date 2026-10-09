@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Text } from 'pixi.js';
 import type { EffectDef } from '@pvz/content';
 
 interface Particle {
@@ -51,6 +51,20 @@ export class Effects {
     g.position.set(x, y);
     this.layer.addChild(g);
     this.live.push({ g, vx, vy, life: 1.6, maxLife: 1.6, gravity: 900, spin: (Math.random() - 0.5) * 8, floor: floorY });
+  }
+
+  /** Floating word (SPUDOW!) that rises and fades. */
+  text(word: string, x: number, y: number, color: number): void {
+    const label = new Text({
+      text: word,
+      style: { fontFamily: 'Trebuchet MS', fontSize: 30, fontWeight: 'bold', fill: color, stroke: { color: 0x3a1a08, width: 5 } },
+    });
+    label.anchor.set(0.5);
+    const g = new Graphics();
+    g.addChild(label);
+    g.position.set(x, y);
+    this.layer.addChild(g);
+    this.live.push({ g, vx: 0, vy: -40, life: 1, maxLife: 1, gravity: 0, spin: 0, floor: Infinity });
   }
 
   update(dt: number): void {

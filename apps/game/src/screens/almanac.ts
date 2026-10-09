@@ -37,9 +37,12 @@ export class AlmanacScreen implements Screen {
     if (!this.root) return;
     const profile = requireProfile(this.ctx);
     const seen = this.seenZombies();
+    if (this.tab === 'zombies' && !profile.features.includes('almanac')) this.tab = 'plants';
     const entries =
       this.tab === 'plants'
-        ? PlantRegistry.all().map((def) => ({ id: def.id, name: def.name, known: def.id in profile.plants }))
+        ? PlantRegistry.all()
+            .filter((def) => !def.tags.includes('minigame'))
+            .map((def) => ({ id: def.id, name: def.name, known: def.id in profile.plants }))
         : ZombieRegistry.all().map((def) => ({ id: def.id, name: def.name, known: seen.has(def.id) }));
     this.selected ??= entries.find((e) => e.known)?.id ?? null;
 
@@ -75,15 +78,21 @@ export class AlmanacScreen implements Screen {
       return b;
     };
 
-    const ownedCount = Object.keys(profile.plants).filter((id) => PlantRegistry.has(id)).length;
+    const collectible = PlantRegistry.all().filter((def) => !def.tags.includes('minigame'));
+    const ownedCount = collectible.filter((def) => def.id in profile.plants).length;
+    const zombiesTab = tabButton('zombies', 'Zombies');
+    if (!profile.features.includes('almanac')) {
+      zombiesTab.disabled = true;
+      zombiesTab.title = 'Find the Almanac in the Day campaign to read about zombies.';
+    }
     this.root.replaceChildren(
       h(
         'div',
         { class: 'screen' },
         h('div', { class: 'back' }, button('Back', () => this.ctx.nav.menu(), 'secondary')),
         h('h1', null, 'Almanac'),
-        h('p', { class: 'subtitle' }, `Plant collection: ${ownedCount} of ${PlantRegistry.size}`),
-        h('div', { class: 'almanac-tabs' }, tabButton('plants', 'Plants'), tabButton('zombies', 'Zombies')),
+        h('p', { class: 'subtitle' }, `Plant collection: ${ownedCount} of ${collectible.length}`),
+        h('div', { class: 'almanac-tabs' }, tabButton('plants', 'Plants'), zombiesTab),
         h('div', { class: 'almanac' }, grid, h('div', { class: 'almanac-detail' }, this.detail(entries.find((e) => e.id === this.selected)))),
       ),
     );

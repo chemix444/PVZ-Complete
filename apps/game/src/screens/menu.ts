@@ -24,7 +24,8 @@ export class MenuScreen implements Screen {
     );
     adventure.disabled = !level;
 
-    const ownedPlants = Object.keys(profile.plants).filter((id) => PlantRegistry.has(id)).length;
+    const collectible = PlantRegistry.all().filter((def) => !def.tags.includes('minigame'));
+    const ownedPlants = collectible.filter((def) => def.id in profile.plants).length;
     const levelsDone = ctx.campaign.order.filter((node) => node.level && ctx.campaign.isCompleted(profile, node.id)).length;
     const totalLevels = ctx.campaign.order.filter((node) => node.level).length;
 
@@ -39,7 +40,7 @@ export class MenuScreen implements Screen {
           { class: 'menu-sign' },
           adventure,
           button('Campaign', () => ctx.nav.campaign(), 'secondary'),
-          button('Plant Collection & Almanac', () => ctx.nav.almanac('plants'), 'secondary'),
+          button(profile.features.includes('almanac') ? 'Almanac' : 'Plant Collection', () => ctx.nav.almanac('plants'), 'secondary'),
           button('Settings', () => ctx.nav.settings(), 'secondary'),
           profile.settings.devTools ? button('Developer Tools', this.openDevTools, 'secondary') : null,
           button('Change User', () => ctx.nav.profiles(), 'secondary'),
@@ -47,7 +48,7 @@ export class MenuScreen implements Screen {
         h(
           'div',
           { class: 'menu-footer' },
-          `${ownedPlants}/${PlantRegistry.size} plants · ${levelsDone}/${totalLevels} levels · press \` for developer tools`,
+          `${ownedPlants}/${collectible.length} plants · ${levelsDone}/${totalLevels} levels · press \` for developer tools`,
         ),
       ),
     );

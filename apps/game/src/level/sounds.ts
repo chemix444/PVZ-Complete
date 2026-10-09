@@ -1,6 +1,13 @@
 import type { AudioEngine } from '@pvz/audio';
 import { AudioRegistry, ProjectileRegistry } from '@pvz/content';
-import { Plant, type SimEvent, type Simulation } from '@pvz/engine';
+import { Plant, Zombie, type SimEvent, type Simulation } from '@pvz/engine';
+
+const EXPLOSION_SOUNDS: Record<string, string> = {
+  cherry: 'audio.explosion',
+  'explode-o-nut': 'audio.explosion',
+  potato: 'audio.potato-mine',
+  doom: 'audio.doom',
+};
 
 const CHOMP_INTERVAL = 0.42;
 
@@ -8,15 +15,20 @@ const CHOMP_INTERVAL = 0.42;
 export class LevelSounds {
   private nextGroan = 6 + Math.random() * 6;
   private readonly chompAt = new Map<number, number>();
+  private lastSummonTick = -1;
 
   constructor(private readonly audio: AudioEngine) {}
 
   handle(event: SimEvent, sim: Simulation): void {
     const play = (id: string | undefined) => id && this.audio.play(id);
     switch (event.type) {
-      case 'plant-placed':
-        play('audio.plant');
+      case 'plant-placed': {
+        const plant = sim.entity(event.plantId);
+        if (plant instanceof Plant && plant.def.tags.includes('bowling')) play('audio.bowling');
+        else if (plant instanceof Plant && plant.def.placeOn === 'grave') play('audio.grave-buster');
+        else play('audio.plant');
         break;
+      }
       case 'plant-rejected':
         play('audio.buzzer');
         break;
@@ -31,7 +43,7 @@ export class LevelSounds {
         break;
       case 'plant-removed':
         if (event.cause === 'eaten') play('audio.gulp');
-        if (event.cause === 'dug') play('audio.plant');
+        if (event.cause === 'dug') play('audio.shovel');
         break;
       case 'zombie-arm-lost':
       case 'zombie-head-lost':
@@ -58,6 +70,45 @@ export class LevelSounds {
         break;
       case 'level-cleared':
         play('audio.reward');
+        break;
+      case 'explosion':
+        play(EXPLOSION_SOUNDS[event.effect] ?? 'audio.explosion');
+        break;
+      case 'zombies-frozen':
+        play('audio.frozen');
+        break;
+      case 'fume':
+        play('audio.fume');
+        break;
+      case 'chomper-bite':
+        if (event.zombieId !== null) play('audio.chomper-bite');
+        break;
+      case 'zombie-hypnotized':
+        play('audio.hypno');
+        break;
+      case 'zombie-vaulted':
+        play('audio.vault');
+        break;
+      case 'zombie-enraged':
+        play('audio.rage');
+        break;
+      case 'backup-summoned':
+        if (this.lastSummonTick !== sim.tick) play('audio.dancer');
+        this.lastSummonTick = sim.tick;
+        break;
+      case 'zombie-spawned': {
+        const zombie = sim.entity(event.zombieId);
+        if (zombie instanceof Zombie && zombie.risingTicks > 0) play('audio.dirt-rise');
+        break;
+      }
+      case 'mine-armed':
+        play('audio.plant');
+        break;
+      case 'roller-hit':
+        play('audio.bowling-impact');
+        break;
+      case 'whack':
+        play('audio.whack');
         break;
     }
   }

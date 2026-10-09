@@ -105,6 +105,7 @@ const day: LevelDef[] = [
     id: 'pvz1-day-05',
     label: '1-5',
     name: 'Wall-nut Bowling',
+    music: 'music.minigame',
     seedSelection: { mode: 'conveyor' },
     conveyor: {
       plants: [
@@ -246,6 +247,7 @@ const night: LevelDef[] = [
     id: 'pvz1-night-05',
     label: '2-5',
     name: 'Whack a Zombie',
+    music: 'music.minigame',
     mode: 'whack',
     seedSelection: { mode: 'preset', slots: 0 },
     graves: { count: 9, minCol: 3 },

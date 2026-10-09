@@ -10,11 +10,14 @@ import { requireProfile, type GameContext } from '../context';
 import { plantIcon } from '../icons';
 import { BoardScene } from './board';
 import { SeedChooser } from './chooser';
-import { Banner, MenuButton, ProgressMeter, SeedBank } from './hud';
+import { Banner, ConveyorBelt, malletArt, MenuButton, MessageBox, ProgressMeter, SeedBank, shovelArt, ShovelSlot } from './hud';
 import { LevelRunner } from './runner';
 import { LevelSounds } from './sounds';
 
 type Phase = 'pan-in' | 'choose' | 'pan-out' | 'ready' | 'play' | 'won' | 'lost';
+
+/** What the cursor is carrying. */
+type Held = { kind: 'seed'; slot: number } | { kind: 'conveyor'; packetId: number } | { kind: 'shovel' };
 
 export interface LevelHooks {
   onSession(session: DevSession | null): void;
@@ -28,13 +31,21 @@ export class LevelScreen implements Screen, DevSession {
   private readonly board: BoardDef;
   private readonly scene: BoardScene;
   private readonly hud = new Container();
-  private readonly bank: SeedBank;
   private readonly banner = new Banner();
+  private readonly messages = new MessageBox();
   private readonly flash = new Graphics();
   private readonly cursorLayer = new Container();
   private readonly sounds: LevelSounds;
   private readonly available: PlantDef[];
   private readonly slots: number;
+  private readonly conveyorLevel: boolean;
+  private readonly whack: boolean;
+  private readonly hasShovel: boolean;
+  private bank: SeedBank | null = null;
+  private belt: ConveyorBelt | null = null;
+  private shovelSlot: ShovelSlot | null = null;
+  private mallet: Container | null = null;
+  private malletSwing = 0;
   private progress: ProgressMeter | null = null;
   private chooser: SeedChooser | null = null;
   private runner: LevelRunner | null = null;
@@ -42,7 +53,7 @@ export class LevelScreen implements Screen, DevSession {
   private phase: Phase = 'pan-in';
   private phaseTime = 0;
   private now = 0;
-  private held = -1;
+  private held: Held | null = null;
   private cursor: Container | null = null;
   private pointer = { x: 400, y: 300 };
   private root: HTMLElement | null = null;
@@ -68,7 +79,7 @@ export class LevelScreen implements Screen, DevSession {
     this.levelId = levelId;
     this.level = playableLevel(levelId);
     this.board = BoardRegistry.get(this.level.board);
-    this.scene = new BoardScene(this.board, ctx.assets);
+    this.scene = new BoardScene(this.board, ctx.assets, this.level);
     this.sounds = new LevelSounds(ctx.audio);
     const profile = requireProfile(ctx);
     const selection = this.level.seedSelection;
@@ -76,10 +87,12 @@ export class LevelScreen implements Screen, DevSession {
     const banned = new Set(selection.banned ?? []);
     const content = contentFor(this.level.era);
     this.available = PlantRegistry.all()
-      .filter((def) => (profile.plants[def.id] || lent.has(def.id)) && !banned.has(def.id))
+      .filter((def) => (profile.plants[def.id] || lent.has(def.id)) && !banned.has(def.id) && !def.tags.includes('minigame'))
       .map((def) => content.plant(def.id));
     this.slots = selection.slots ?? profile.seedSlots;
-    this.bank = new SeedBank(this.slots);
+    this.conveyorLevel = selection.mode === 'conveyor';
+    this.whack = this.level.mode === 'whack';
+    this.hasShovel = this.level.shovel === true || profile.features.includes('shovel');
   }
 
   // ---- DevSession ----------------------------------------------------------
@@ -143,12 +156,31 @@ export class LevelScreen implements Screen, DevSession {
     stage.scene.addChild(this.scene.root, this.hud);
     this.flash.rect(0, 0, 800, 600).fill(0xffffff);
     this.flash.alpha = 0;
-    this.hud.addChild(this.bank, this.banner, new MenuButton(() => this.pause()), this.cursorLayer, this.flash);
     // Overlays must not take part in hit testing: under an interactive parent
     // Pixi treats any passive child containing the point as an occluder.
     this.cursorLayer.eventMode = 'none';
     this.flash.eventMode = 'none';
     this.banner.eventMode = 'none';
+
+    let right = 6;
+    if (this.conveyorLevel) {
+      this.belt = new ConveyorBelt(this.level.conveyor!.capacity, (packetId) => this.pickConveyor(packetId));
+      this.hud.addChild(this.belt);
+      right = this.belt.right;
+    } else if (this.slots > 0) {
+      this.bank = new SeedBank(this.slots);
+      this.hud.addChild(this.bank);
+      right = this.bank.right;
+    }
+    if (this.hasShovel) {
+      this.shovelSlot = new ShovelSlot(right, () => this.pickShovel());
+      this.hud.addChild(this.shovelSlot);
+    }
+    if (this.whack) {
+      this.mallet = malletArt();
+      this.cursorLayer.addChild(this.mallet);
+    }
+    this.hud.addChild(this.messages, this.banner, new MenuButton(() => this.pause()), this.cursorLayer, this.flash);
 
     this.listen('pointermove', (event) => {
       const p = event.getLocalPosition(stage.scene);
@@ -161,20 +193,17 @@ export class LevelScreen implements Screen, DevSession {
       if (reward.type === 'plant' && reward.id) void plantIcon(this.ctx.stage.app, reward.id);
     }
 
-    const zombies = levelZombieTypes(this.level);
-    if (this.level.seedSelection.mode === 'choose' && this.available.length > 0) {
-      this.ctx.audio.playMusic('music.choose-seeds');
-      this.scene.showPreview(zombies, Math.min(10, 3 + this.level.waves.length));
-      this.setPhase('pan-in');
-    } else {
+    this.scene.showPreview(levelZombieTypes(this.level), Math.min(10, 3 + this.level.waves.length + (this.level.waveGenerator?.waves ?? 0) / 2));
+    if (this.needsChooser()) this.ctx.audio.playMusic('music.choose-seeds');
+    else {
       const forced = this.level.seedSelection.forced ?? [];
       this.seeds = [
         ...this.available.filter((d) => forced.includes(d.id)),
         ...this.available.filter((d) => !forced.includes(d.id)),
       ].slice(0, this.slots);
-      this.bank.setPlants(this.seeds);
-      this.startReady();
+      this.bank?.setPlants(this.seeds);
     }
+    this.setPhase('pan-in');
   }
 
   unmount(): void {
@@ -192,12 +221,20 @@ export class LevelScreen implements Screen, DevSession {
     this.phaseTime += dt;
     this.scene.update(dt);
     this.banner.update(dt);
+    this.messages.update(dt);
 
     switch (this.phase) {
       case 'pan-in':
-        if (this.phaseTime > 0.6 && !this.scene.panning && !this.chooser) {
-          this.scene.panTo(this.board.view.maxX - 800, 1.5, () => this.showChooser());
+        if (this.phaseTime > 0.6 && !this.scene.panning && this.scene.cameraX === 0) {
+          this.scene.panTo(this.board.view.maxX - 800, 1.5, () => {
+            if (this.needsChooser()) this.showChooser();
+            else this.setPhase('choose');
+          });
         }
+        break;
+      case 'choose':
+        // Levels without seed selection only pause on the street to show the zombies.
+        if (!this.chooser && this.phaseTime > 1.2) this.leaveStreet();
         break;
       case 'ready':
         this.updateReady();
@@ -222,13 +259,15 @@ export class LevelScreen implements Screen, DevSession {
       if (this.phase === 'lost') this.walkIntoHouse();
       this.progress?.update(sim.waves.progress());
     }
-    this.bank.update(sim, sim ? sim.sun : this.level.startingSun, this.held, this.now);
-    this.updateCursor();
+    this.bank?.update(sim, sim ? sim.sun : this.level.startingSun, this.held?.kind === 'seed' ? this.held.slot : -1, this.now);
+    this.belt?.update(sim?.conveyor?.packets ?? [], this.held?.kind === 'conveyor' ? this.held.packetId : null, dt, this.now);
+    this.shovelSlot?.setHeld(this.held?.kind === 'shovel');
+    this.updateCursor(dt);
   }
 
   onKey(event: KeyboardEvent): boolean {
     if (event.key !== 'Escape') return false;
-    if (this.held >= 0) this.drop();
+    if (this.held) this.drop();
     else if (this.closeModal && this.phase !== 'won' && this.phase !== 'lost') this.resume();
     else this.pause();
     return true;
@@ -241,6 +280,11 @@ export class LevelScreen implements Screen, DevSession {
     this.phaseTime = 0;
   }
 
+  /** PvZ 1 only shows seed selection when the player owns more plants than fit in the bank. */
+  private needsChooser(): boolean {
+    return this.level.seedSelection.mode === 'choose' && this.available.length > this.slots;
+  }
+
   private showChooser(): void {
     const forced = new Set(this.level.seedSelection.forced ?? []);
     this.chooser = new SeedChooser(this.available, this.slots, forced, () => this.syncChosen(), () => this.confirmSeeds());
@@ -250,8 +294,8 @@ export class LevelScreen implements Screen, DevSession {
 
   private syncChosen(): void {
     this.ctx.audio.play('audio.tap');
-    this.bank.setPlants(this.chooser!.chosen);
-    this.bank.packets.forEach((packet) => {
+    this.bank!.setPlants(this.chooser!.chosen);
+    this.bank!.packets.forEach((packet) => {
       packet.on('pointerdown', (event) => {
         event.stopPropagation();
         if (this.phase === 'choose') this.chooser?.remove(packet.def);
@@ -265,6 +309,10 @@ export class LevelScreen implements Screen, DevSession {
     this.chooser.destroy({ children: true });
     this.chooser = null;
     this.ctx.audio.play('audio.tap');
+    this.leaveStreet();
+  }
+
+  private leaveStreet(): void {
     this.ctx.audio.playMusic(null, 1);
     this.setPhase('pan-out');
     this.scene.panTo(0, 1.4, () => {
@@ -284,13 +332,15 @@ export class LevelScreen implements Screen, DevSession {
     });
     this.runner = new LevelRunner(sim);
     this.runner.speed = this.desiredSpeed;
-    this.bank.setPlants(this.seeds);
-    this.bank.packets.forEach((packet, i) => {
-      packet.on('pointerdown', (event) => {
-        event.stopPropagation();
-        this.pickSeed(i);
+    if (this.bank) {
+      this.bank.setPlants(this.seeds);
+      this.bank.packets.forEach((packet, i) => {
+        packet.on('pointerdown', (event) => {
+          event.stopPropagation();
+          this.pickSeed(i);
+        });
       });
-    });
+    }
     this.ctx.audio.play('audio.ready-set-plant');
     this.setPhase('ready');
   }
@@ -309,6 +359,8 @@ export class LevelScreen implements Screen, DevSession {
     if (this.phaseTime >= 2) {
       this.ctx.audio.playMusic(this.level.music ?? null, 1.5);
       this.setPhase('play');
+      // Events from setup (graves, starting plants) and the first tick's scripts.
+      this.processEvents();
     }
   }
 
@@ -338,22 +390,45 @@ export class LevelScreen implements Screen, DevSession {
       sim.issue({ type: 'collect', pickupId: pickup.id });
       return;
     }
-    if (this.held < 0) return;
+    if (this.whack && !this.held) {
+      sim.issue({ type: 'whack', x: at.x, y: at.y });
+      this.malletSwing = 0.18;
+      return;
+    }
+    const held = this.held;
+    if (!held) return;
     const row = sim.lawn.rowAt(at.y);
     const col = sim.lawn.colAt(at.x);
     if (row < 0 || col < 0) {
       this.drop();
       return;
     }
-    if (sim.checkPlanting(this.held, row, col) !== null) return;
-    sim.issue({ type: 'plant', slot: this.held, row, col });
+    if (held.kind === 'shovel') {
+      if (sim.lawn.topPlantAt(row, col)) {
+        sim.issue({ type: 'dig', row, col });
+        this.drop();
+      }
+      return;
+    }
+    if (held.kind === 'seed') {
+      if (sim.checkPlanting(held.slot, row, col) !== null) return;
+      sim.issue({ type: 'plant', slot: held.slot, row, col });
+    } else {
+      const packet = sim.conveyor?.find(held.packetId);
+      if (!packet || sim.canPlace(packet.def, row, col) !== null) return;
+      sim.issue({ type: 'plant-conveyor', packetId: held.packetId, row, col });
+    }
     this.drop();
+  }
+
+  private canPick(): boolean {
+    return this.phase === 'play' && this.sim !== null && !this.closeModal && !this.runner!.paused;
   }
 
   private pickSeed(slot: number): void {
     const sim = this.sim;
-    if (this.phase !== 'play' || !sim || this.closeModal || this.runner!.paused) return;
-    if (this.held === slot) {
+    if (!this.canPick() || !sim) return;
+    if (this.held?.kind === 'seed' && this.held.slot === slot) {
       this.drop();
       return;
     }
@@ -364,31 +439,79 @@ export class LevelScreen implements Screen, DevSession {
     }
     if (sim.sun < packet.cost) {
       this.ctx.audio.play('audio.buzzer');
-      this.bank.flashSun(this.now);
+      this.bank?.flashSun(this.now);
       return;
     }
+    this.hold({ kind: 'seed', slot }, plantArt(packet.def.id, packet.def.name).root);
+  }
+
+  private pickConveyor(packetId: number): void {
+    const packet = this.sim?.conveyor?.find(packetId);
+    if (!this.canPick() || !packet) return;
+    if (this.held?.kind === 'conveyor' && this.held.packetId === packetId) {
+      this.drop();
+      return;
+    }
+    this.hold({ kind: 'conveyor', packetId }, plantArt(packet.def.id, packet.def.name).root);
+  }
+
+  private pickShovel(): void {
+    if (!this.canPick()) return;
+    if (this.held?.kind === 'shovel') {
+      this.drop();
+      return;
+    }
+    const art = shovelArt();
+    art.scale.set(1.3);
+    art.position.set(40, 60);
+    const holder = new Container();
+    holder.addChild(art);
+    this.hold({ kind: 'shovel' }, holder);
+  }
+
+  private hold(held: Held, art: Container): void {
     this.drop();
-    this.held = slot;
+    this.held = held;
     this.ctx.audio.play('audio.seed-lift');
-    this.cursor = plantArt(packet.def.id, packet.def.name).root;
+    this.cursor = art;
     this.cursorLayer.addChild(this.cursor);
+    if (this.mallet) this.mallet.visible = false;
   }
 
   private drop(): void {
-    this.held = -1;
+    this.held = null;
     this.cursor?.destroy({ children: true });
     this.cursor = null;
     this.scene.setGhost(null, null, false);
+    if (this.mallet) this.mallet.visible = true;
   }
 
-  private updateCursor(): void {
+  private heldPlant(): PlantDef | null {
     const sim = this.sim;
-    if (!this.cursor || !sim || this.held < 0) return;
+    if (!sim || !this.held) return null;
+    if (this.held.kind === 'seed') return sim.seedBank[this.held.slot].def;
+    if (this.held.kind === 'conveyor') return sim.conveyor?.find(this.held.packetId)?.def ?? null;
+    return null;
+  }
+
+  private updateCursor(dt: number): void {
+    if (this.mallet) {
+      this.malletSwing = Math.max(0, this.malletSwing - dt);
+      this.mallet.position.set(this.pointer.x - 10, this.pointer.y + 30);
+      this.mallet.rotation = this.malletSwing > 0 ? -0.9 * (this.malletSwing / 0.18) : -0.3;
+    }
+    const sim = this.sim;
+    if (!this.cursor || !sim || !this.held) return;
     this.cursor.position.set(this.pointer.x - 40, this.pointer.y - 60);
+    const def = this.heldPlant();
+    if (!def) {
+      this.scene.setGhost(null, null, false);
+      if (this.held.kind === 'conveyor') this.drop();
+      return;
+    }
     const at = this.scene.toBoard(this.pointer.x, this.pointer.y);
     const row = sim.lawn.rowAt(at.y);
     const col = sim.lawn.colAt(at.x);
-    const def = sim.seedBank[this.held].def;
     const cell = row >= 0 && col >= 0 ? { row, col } : null;
     this.scene.setGhost(def, cell, cell !== null && sim.canPlace(def, row, col) === null);
   }
@@ -425,6 +548,9 @@ export class LevelScreen implements Screen, DevSession {
         case 'final-wave':
           this.banner.show('FINAL WAVE', { size: 60, duration: 3 });
           break;
+        case 'message':
+          this.messages.show(event.text, event.duration);
+          break;
         case 'level-won':
           this.onWon();
           break;
@@ -452,6 +578,7 @@ export class LevelScreen implements Screen, DevSession {
 
   private onWon(): void {
     this.drop();
+    this.messages.hide();
     this.closeModal?.();
     this.closeModal = null;
     this.setPhase('won');
@@ -554,17 +681,26 @@ export class LevelScreen implements Screen, DevSession {
   private showWinResult(): void {
     const ctx = this.ctx;
     const profile = requireProfile(ctx);
-    const plantReward = this.completion?.granted.find((r) => r.type === 'plant' && r.id && PlantRegistry.has(r.id));
+    const granted = this.completion?.granted ?? [];
+    const plantReward = granted.find((r) => r.type === 'plant' && r.id && PlantRegistry.has(r.id));
+    const otherReward = granted.find((r) => r.type === 'feature' || r.type === 'note');
     const next = profile.campaign.current ? ctx.campaign.node(profile.campaign.current) : null;
     const nextLevel = next?.level && next.level !== this.level.id ? next.level : null;
-    const img = h('img', { alt: '' });
     const card = h('div', { class: 'result-card' });
     if (plantReward) {
       const def = PlantRegistry.get(plantReward.id!);
+      const img = h('img', { alt: '' });
       void plantIcon(ctx.stage.app, def.id).then((src) => (img.src = src));
       card.append(panel('You got a new plant!', img, h('h3', null, def.name), h('p', null, def.description ?? '')));
+    } else if (otherReward) {
+      const [title, text] = REWARD_TEXT[otherReward.id ?? ''] ?? ['You found something!', ''];
+      card.append(panel(title, h('p', null, text)));
     } else {
       card.append(panel('Level Complete!', h('p', null, `${this.level.name} ${this.level.label} cleared.`)));
+    }
+    if (plantReward && otherReward) {
+      const [title, text] = REWARD_TEXT[otherReward.id ?? ''] ?? ['', ''];
+      card.querySelector('.pvz-panel')!.append(h('p', null, h('strong', null, title), ' ', text));
     }
     card.querySelector('.pvz-panel')!.append(
       h(
@@ -597,3 +733,11 @@ export class LevelScreen implements Screen, DevSession {
     this.closeModal = modal(this.root!, card);
   }
 }
+
+/** Result card text for non-plant rewards. Written for this project. */
+const REWARD_TEXT: Record<string, [string, string]> = {
+  shovel: ['You got the shovel!', 'Dig up plants you no longer want. It sits next to your seed bank.'],
+  almanac: ['You found the Almanac!', 'Look up every plant and zombie you have met from the main menu.'],
+  'zombie-note-1': ['You found a note!', 'It is from the zombies. They would like to come over for dinner. They are bringing their own appetite.'],
+  'zombie-note-2': ['Another note!', 'The zombies say they will visit after dark, around the pool. They hope you like swimming.'],
+};

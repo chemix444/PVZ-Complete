@@ -57,6 +57,11 @@ export class SeedBank extends Container {
     return { x: BANK_X + PACKET_START + index * PACKET_STEP, y: 9 };
   }
 
+  /** Where a slot to the right of the bank goes. */
+  get right(): number {
+    return BANK_X + PACKET_START + this.slots * PACKET_STEP + 4;
+  }
+
   update(sim: Simulation | null, sun: number, held: number, now: number): void {
     this.sunText.text = String(sun);
     this.sunText.style.fill = now < this.flashUntil && Math.floor(now * 10) % 2 === 0 ? 0xd02010 : 0x2b1d0e;
@@ -185,5 +190,159 @@ export class MenuButton extends CanvasButton {
   constructor(onClick: () => void) {
     super('Menu', 96, 34, onClick);
     this.position.set(800 - 96 - 10, 8);
+  }
+}
+
+const BELT_SLOT = 54;
+
+/**
+ * Conveyor-belt seed bank: packets arrive at the right end and slide left
+ * into the first free place. Clicking a packet picks it up.
+ */
+export class ConveyorBelt extends Container {
+  private readonly views = new Map<number, { view: SeedPacketView; x: number }>();
+  private readonly stripes = new Graphics();
+  private readonly beltWidth: number;
+
+  constructor(
+    capacity: number,
+    private readonly onPick: (packetId: number) => void,
+  ) {
+    super();
+    this.beltWidth = 20 + capacity * BELT_SLOT;
+    const frame = new Graphics()
+      .roundRect(0, 0, this.beltWidth, 88, 8)
+      .fill(0x4a3a2a)
+      .stroke({ width: 3, color: 0x2a1a0a })
+      .roundRect(8, 8, this.beltWidth - 16, 72, 6)
+      .fill(0x2b2b2b);
+    const mask = new Graphics().roundRect(8, 8, this.beltWidth - 16, 72, 6).fill(0xffffff);
+    this.stripes.mask = mask;
+    this.addChild(frame, this.stripes, mask);
+    this.position.set(BANK_X, 0);
+  }
+
+  update(packets: readonly { id: number; def: PlantDef }[], held: number | null, dt: number, now: number): void {
+    this.stripes.clear();
+    const offset = (now * 30) % 24;
+    for (let x = -24 + 8; x < this.beltWidth; x += 24) this.stripes.rect(x - offset + 24, 8, 4, 72).fill({ color: 0x555555, alpha: 0.7 });
+    const seen = new Set<number>();
+    packets.forEach((packet, index) => {
+      seen.add(packet.id);
+      let entry = this.views.get(packet.id);
+      if (!entry) {
+        const view = new SeedPacketView(packet.def, false);
+        view.on('pointerdown', (event) => {
+          event.stopPropagation();
+          this.onPick(packet.id);
+        });
+        entry = { view, x: this.beltWidth - 10 };
+        this.views.set(packet.id, entry);
+        this.addChild(entry.view);
+      }
+      const target = 12 + index * BELT_SLOT;
+      entry.x = Math.max(target, entry.x - 140 * dt);
+      entry.view.position.set(entry.x, 9);
+      entry.view.setState({ charge: 1, affordable: true, held: held === packet.id });
+    });
+    for (const [id, entry] of this.views) {
+      if (seen.has(id)) continue;
+      entry.view.destroy({ children: true });
+      this.views.delete(id);
+    }
+  }
+
+  /** Where a slot to the right of the belt goes. */
+  get right(): number {
+    return BANK_X + this.beltWidth;
+  }
+}
+
+/** Shovel box shown to the right of the seed bank once the shovel is available. */
+export class ShovelSlot extends Container {
+  private readonly frame = new Graphics();
+
+  constructor(x: number, onClick: () => void) {
+    super();
+    const bg = new Graphics().roundRect(0, 0, 70, 72, 8).fill(0x7a4a22).stroke({ width: 3, color: 0x4a2a10 });
+    bg.roundRect(6, 6, 58, 60, 6).fill(0x5a3416);
+    const shovel = shovelArt();
+    shovel.position.set(35, 36);
+    this.addChild(bg, shovel, this.frame);
+    this.position.set(x + 6, 8);
+    this.eventMode = 'static';
+    this.cursor = 'pointer';
+    this.on('pointerdown', (event) => {
+      event.stopPropagation();
+      onClick();
+    });
+  }
+
+  setHeld(held: boolean): void {
+    this.frame.clear();
+    if (held) this.frame.roundRect(-2, -2, 74, 76, 9).stroke({ width: 3, color: 0xffe14d });
+  }
+}
+
+/** Centered on its grip. */
+export function shovelArt(): Container {
+  const g = new Graphics();
+  g.moveTo(-14, 14).lineTo(10, -10).stroke({ width: 5, color: 0x8a5a2b, cap: 'round' });
+  g.moveTo(-20, 8).lineTo(-8, 20).stroke({ width: 5, color: 0x5a3a1b, cap: 'round' });
+  g.poly([8, -8, 22, -26, 28, -20, 12, -2]).fill(0xb8bcc0).stroke({ width: 2, color: 0x5a5e62 });
+  const c = new Container();
+  c.addChild(g);
+  return c;
+}
+
+/** Whack a Zombie mallet, pivot at the grip. */
+export function malletArt(): Container {
+  const g = new Graphics();
+  g.moveTo(0, 0).lineTo(22, -30).stroke({ width: 6, color: 0x8a5a2b, cap: 'round' });
+  g.roundRect(10, -50, 34, 22, 6).fill(0xb03020).stroke({ width: 2, color: 0x5a1008 });
+  const c = new Container();
+  c.addChild(g);
+  return c;
+}
+
+/** Tutorial and advice text at the bottom of the screen. */
+export class MessageBox extends Container {
+  private readonly bg = new Graphics();
+  private readonly text: Text;
+  private remaining = 0;
+
+  constructor() {
+    super();
+    this.text = new Text({
+      text: '',
+      style: { fontFamily: 'Trebuchet MS', fontSize: 18, fontWeight: 'bold', fill: 0x2b1d0e, wordWrap: true, wordWrapWidth: 600, align: 'center' },
+    });
+    this.text.anchor.set(0.5);
+    this.addChild(this.bg, this.text);
+    this.visible = false;
+    this.eventMode = 'none';
+  }
+
+  /** duration 0 keeps the message until the next one. */
+  show(message: string, duration: number): void {
+    this.text.text = message;
+    const w = Math.min(640, this.text.width + 40);
+    const h = this.text.height + 22;
+    this.bg.clear().roundRect(400 - w / 2, 540 - h / 2, w, h, 10).fill({ color: 0xfff6d0, alpha: 0.95 }).stroke({ width: 3, color: 0x7a4a22 });
+    this.text.position.set(400, 540);
+    this.remaining = duration > 0 ? duration : Infinity;
+    this.alpha = 1;
+    this.visible = true;
+  }
+
+  hide(): void {
+    this.visible = false;
+  }
+
+  update(dt: number): void {
+    if (!this.visible || this.remaining === Infinity) return;
+    this.remaining -= dt;
+    this.alpha = Math.min(1, Math.max(0, this.remaining / 0.4));
+    if (this.remaining <= 0) this.visible = false;
   }
 }

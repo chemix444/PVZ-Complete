@@ -1,5 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
-import { dayLawnArt, plantArt, zombieArt, zombieHeadArt, type AssetLibrary } from '@pvz/assets';
+import { lawnArt, plantArt, zombieArtFor, zombieHeadArt, type AssetLibrary } from '@pvz/assets';
 import { EffectRegistry } from '@pvz/content';
 import {
   Pickup,
@@ -7,13 +7,22 @@ import {
   ShooterBehavior,
   Zombie,
   type BoardDef,
+  type LevelDef,
   type PlantDef,
   type SimEvent,
   type Simulation,
 } from '@pvz/engine';
 import { imageSprite } from './clip';
 import { Effects } from './effects';
-import { MowerView, PickupView, PlantView, ProjectileView, ZombieView } from './views';
+import { GridItemView, MowerView, PickupView, PlantView, ProjectileView, RollerView, ZombieView } from './views';
+
+/** Pieces that fly off a zombie when its armor breaks. */
+const ARMOR_DEBRIS: Record<string, () => Graphics> = {
+  cone: () => new Graphics().poly([-15, 0, 15, 0, 0, -38]).fill(0xd06f10).stroke({ width: 2, color: 0x9c4d08 }),
+  bucket: () => new Graphics().poly([-14, 0, 14, 0, 11, -26, -11, -26]).fill(0x9aa2a8).stroke({ width: 2, color: 0x5a6268 }),
+  'football-helmet': () => new Graphics().ellipse(0, -10, 17, 14).fill(0xc0281c).stroke({ width: 2, color: 0x6a1008 }),
+  'screen-door': () => new Graphics().rect(-16, -40, 32, 60).fill({ color: 0x7a8a80, alpha: 0.8 }).stroke({ width: 3, color: 0x4a4a42 }),
+};
 
 export interface DebugOverlays {
   hitboxes: boolean;
@@ -48,6 +57,11 @@ export class BoardScene {
   private readonly projectiles = new Map<number, ProjectileView>();
   private readonly pickupViews = new Map<number, PickupView>();
   private readonly mowers = new Map<number, MowerView>();
+  private readonly rollers = new Map<number, RollerView>();
+  private readonly items = new Map<number, GridItemView>();
+  private readonly frost = new Graphics();
+  private shakeLeft = 0;
+  private shakePower = 0;
   private readonly preview: Container[] = [];
   private ghost: { container: Container; plant: string } | null = null;
   private pan: Pan | null = null;
@@ -59,11 +73,40 @@ export class BoardScene {
   constructor(
     readonly board: BoardDef,
     private readonly assets: AssetLibrary,
+    level: LevelDef,
   ) {
     this.entities.sortableChildren = true;
-    const background = imageSprite(assets, board.view.background) ?? this.placeholderBackground();
-    this.world.addChild(background, this.ghostLayer, this.entities, this.effects.layer, this.pickups, this.debug, this.debugText);
-    this.root.addChild(this.world);
+    const background = imageSprite(assets, board.view.background) ?? lawnArt(board, board.daytime ? 'day' : 'night');
+    this.world.addChild(background, this.groundMarks(level), this.ghostLayer, this.entities, this.effects.layer, this.pickups, this.debug, this.debugText);
+    this.frost.rect(0, 0, 800, 600).fill(0xd8f0ff);
+    this.frost.alpha = 0;
+    this.frost.eventMode = 'none';
+    this.root.addChild(this.world, this.frost);
+  }
+
+  /** Bare dirt over unsodded rows, and the red line of planting-limited levels. */
+  private groundMarks(level: LevelDef): Graphics {
+    const g = new Graphics();
+    const { origin, tile, cols, rows } = this.board;
+    level.lanes?.forEach((surface, row) => {
+      if (surface !== 'dirt') return;
+      const y = origin.y + row * tile.height;
+      g.rect(origin.x, y, cols * tile.width, tile.height).fill(0x8a6236);
+      for (let i = 0; i < 40; i++) {
+        g.circle(origin.x + ((i * 53 + row * 31) % (cols * tile.width)), y + 10 + ((i * 37) % (tile.height - 20)), 2 + (i % 3)).fill(0x6e4a24);
+      }
+    });
+    if (level.plantableCols !== undefined) {
+      const x = origin.x + level.plantableCols * tile.width;
+      g.rect(x - 2, origin.y, 4, rows * tile.height).fill(0xd0201a);
+    }
+    return g;
+  }
+
+  /** Rattles the camera, for explosions. */
+  shake(power: number, duration: number): void {
+    this.shakePower = Math.max(this.shakePower, power);
+    this.shakeLeft = Math.max(this.shakeLeft, duration);
   }
 
   setCamera(x: number): void {
@@ -99,6 +142,15 @@ export class BoardScene {
       }
     }
     this.effects.update(dt);
+    this.frost.alpha = Math.max(0, this.frost.alpha - dt * 1.2);
+    if (this.shakeLeft > 0) {
+      this.shakeLeft -= dt;
+      this.world.y = (Math.random() - 0.5) * this.shakePower * 2;
+      if (this.shakeLeft <= 0) {
+        this.world.y = 0;
+        this.shakePower = 0;
+      }
+    }
   }
 
   /** Idle zombies standing in the street while seeds are chosen. */
@@ -106,7 +158,7 @@ export class BoardScene {
     const street = this.board.view.maxX - 260;
     for (let i = 0; i < count; i++) {
       const id = zombieIds[i % zombieIds.length];
-      const art = zombieArt({ armor: id === 'conehead' ? ['cone'] : [], flag: id === 'flag' });
+      const art = zombieArtFor(id);
       const row = (i * 3) % this.board.rows;
       art.root.position.set(street + ((i * 71) % 180), this.board.origin.y + row * this.board.tile.height - 20 + ((i * 37) % 30));
       art.root.zIndex = art.root.y;
@@ -160,6 +212,14 @@ export class BoardScene {
       (m) => new MowerView(m, sim.lawn.rowY(m.row)),
       (v, m) => v.update(m, sim.lawn.rowY(m.row), alpha, now),
     );
+    syncViews(sim.rollers, this.rollers, this.entities, (r) => new RollerView(r), (v, r) => v.update(r, alpha));
+    syncViews(
+      sim.gridItems,
+      this.items,
+      this.entities,
+      (item) => new GridItemView(item, sim.lawn.cellX(item.col), sim.lawn.rowY(item.row)),
+      (v, item) => v.update(item),
+    );
     this.drawDebug(sim);
   }
 
@@ -173,16 +233,34 @@ export class BoardScene {
   }
 
   handleEvent(event: SimEvent, sim: Simulation, now: number): void {
+    const fx = (id: string, x: number, y: number) => this.effects.burst(EffectRegistry.get(id), x, y);
     switch (event.type) {
       case 'projectile-hit': {
         this.zombies.get(event.zombieId)?.flash(now);
-        const effect = event.armorMaterial === 'plastic' ? 'effect.plastic-chip' : 'effect.pea-splat';
-        this.effects.burst(EffectRegistry.get(effect), event.x + 20, event.y);
+        const material = event.armorMaterial;
+        const effect =
+          material === 'plastic'
+            ? 'effect.plastic-chip'
+            : material === 'metal'
+              ? 'effect.metal'
+              : material === 'paper'
+                ? 'effect.paper'
+                : event.def === 'snow-pea'
+                  ? 'effect.ice'
+                  : event.def.includes('spore')
+                    ? 'effect.spore-splat'
+                    : 'effect.pea-splat';
+        fx(effect, event.x + 20, event.y);
         break;
       }
       case 'plant-placed': {
         const lawn = sim.lawn;
-        this.effects.burst(EffectRegistry.get('effect.dirt'), lawn.cellX(event.col) + 40, lawn.rowY(event.row) + 90);
+        fx('effect.dirt', lawn.cellX(event.col) + 40, lawn.rowY(event.row) + 90);
+        break;
+      }
+      case 'zombie-spawned': {
+        const zombie = sim.entity(event.zombieId);
+        if (zombie instanceof Zombie && zombie.risingTicks > 0) fx('effect.dirt', zombie.centerX, zombie.y + 95);
         break;
       }
       case 'zombie-head-lost': {
@@ -190,7 +268,7 @@ export class BoardScene {
         if (zombie instanceof Zombie) {
           const head = zombieHeadArt();
           head.pivot.set(57, 6);
-          this.effects.debris(head, zombie.x + 57, zombie.y + 6, 50, -240, zombie.y + 84);
+          this.effects.debris(head, zombie.x + 57, zombie.y + 6, zombie.hypnotized ? -50 : 50, -240, zombie.y + 84);
         }
         break;
       }
@@ -204,12 +282,57 @@ export class BoardScene {
       }
       case 'armor-lost': {
         const zombie = sim.entity(event.zombieId);
-        if (zombie instanceof Zombie && event.armor === 'cone') {
-          const cone = new Graphics().poly([-15, 0, 15, 0, 0, -38]).fill(0xd06f10).stroke({ width: 2, color: 0x9c4d08 });
-          this.effects.debris(cone, zombie.x + 57, zombie.y - 4, 60, -220, zombie.y + 92);
-        }
+        if (!(zombie instanceof Zombie)) break;
+        const part = ARMOR_DEBRIS[event.armor];
+        if (part) this.effects.debris(part(), zombie.x + 57, zombie.y - 4, 60, -220, zombie.y + 92);
+        if (event.material === 'paper') fx('effect.paper', zombie.x + 30, zombie.y + 50);
         break;
       }
+      case 'zombie-died':
+        if (event.cause === 'explosion') {
+          const zombie = sim.entity(event.zombieId);
+          if (zombie instanceof Zombie) fx('effect.ash', zombie.centerX, zombie.y + 60);
+        }
+        break;
+      case 'explosion': {
+        const big = event.effect === 'doom';
+        fx(big ? 'effect.doom' : 'effect.explosion', event.x, event.y);
+        fx('effect.smoke', event.x, event.y);
+        if (big) {
+          fx('effect.doom', event.x, event.y - 60);
+          fx('effect.smoke', event.x, event.y - 90);
+        }
+        if (event.effect === 'potato') {
+          fx('effect.dirt', event.x, event.y + 20);
+          this.effects.text('SPUDOW!', event.x, event.y - 40, 0xffe14d);
+        }
+        this.shake(big ? 10 : 5, big ? 1.2 : 0.4);
+        break;
+      }
+      case 'zombies-frozen':
+        this.frost.alpha = 0.7;
+        for (const zombie of sim.zombies) if (zombie.freezeTicks > 0) fx('effect.ice', zombie.centerX, zombie.y + 50);
+        break;
+      case 'fume':
+        for (let x = event.x0; x < event.x1; x += 40) fx('effect.fume', x, sim.lawn.rowY(event.row) + 60);
+        break;
+      case 'zombie-hypnotized': {
+        const zombie = sim.entity(event.zombieId);
+        if (zombie instanceof Zombie) fx('effect.fume', zombie.centerX, zombie.y + 10);
+        break;
+      }
+      case 'grave-removed':
+        fx('effect.dirt', sim.lawn.cellX(event.col) + 40, sim.lawn.rowY(event.row) + 80);
+        break;
+      case 'roller-hit': {
+        const zombie = sim.entity(event.zombieId);
+        if (zombie instanceof Zombie) fx('effect.dirt', zombie.centerX, zombie.y + 80);
+        break;
+      }
+      case 'whack':
+        fx('effect.dirt', event.x, event.y + 20);
+        if (event.zombieId !== null) this.zombies.get(event.zombieId)?.flash(now);
+        break;
     }
   }
 
@@ -235,10 +358,6 @@ export class BoardScene {
   destroy(): void {
     this.effects.clear();
     this.root.destroy({ children: true });
-  }
-
-  private placeholderBackground(): Container {
-    return dayLawnArt(this.board);
   }
 
   private drawDebug(sim: Simulation): void {

@@ -178,6 +178,46 @@ const presets: Record<string, Preset> = {
   tap: (sr) => new Mixer(0.05, sr).noise(0, 0.02, 0.5, { decay: 0.004 }, 0.7).tone(0, 0.03, 1600, 'sine', 0.25, { decay: 0.01 }).finish(0.6),
   'seed-lift': (sr) => new Mixer(0.1, sr).tone(0, 0.08, (t) => 700 + 2500 * t, 'triangle', 0.4, { decay: 0.04 }).finish(0.6),
   buzzer: (sr) => new Mixer(0.32, sr).tone(0, 0.3, 140, 'square', 0.3, { attack: 0.01, decay: 0.4 }).lowpass(0.3).finish(0.6),
+  puff: (sr) => new Mixer(0.15, sr).noise(0, 0.12, 0.6, { decay: 0.04 }, 0.2).tone(0, 0.1, (t) => 300 - 900 * t, 'sine', 0.4, { decay: 0.04 }).finish(0.6),
+  fume: (sr) =>
+    new Mixer(0.5, sr).noise(0, 0.45, 0.7, { attack: 0.05, decay: 0.2 }, 0.12).tone(0, 0.4, (t) => 180 - 120 * t, 'sine', 0.3, { decay: 0.2 }).finish(0.6),
+  'frozen-hit': (sr) =>
+    new Mixer(0.25, sr).noise(0, 0.14, 0.6, { decay: 0.04 }, 0.3).tone(0.02, 0.2, 2400, 'sine', 0.2, { decay: 0.07 }).tone(0.05, 0.18, 3100, 'sine', 0.12, { decay: 0.06 }).finish(0.7),
+  'metal-hit': (sr) =>
+    new Mixer(0.25, sr).tone(0, 0.2, 620, 'square', 0.2, { decay: 0.05 }).tone(0, 0.22, 930, 'square', 0.12, { decay: 0.06 }).noise(0, 0.05, 0.4, { decay: 0.01 }, 0.8).lowpass(0.5).finish(0.6),
+  'paper-hit': (sr) => new Mixer(0.15, sr).noise(0, 0.12, 0.5, { decay: 0.03 }, 0.9).finish(0.5),
+  explosion: (sr) =>
+    new Mixer(1.6, sr).tone(0, 1.2, (t) => 120 - 70 * t, 'sine', 0.9, { decay: 0.35 }).noise(0, 1.4, 0.9, { decay: 0.35 }, 0.12).finish(0.95),
+  'potato-mine': (sr) =>
+    new Mixer(1.1, sr).tone(0, 0.9, (t) => 150 - 100 * t, 'sine', 0.8, { decay: 0.25 }).noise(0, 0.9, 0.8, { decay: 0.2 }, 0.2).finish(0.9),
+  doom: (sr) =>
+    new Mixer(3, sr)
+      .tone(0, 2.8, (t) => 70 - 15 * t, 'sine', 0.9, { decay: 0.9 })
+      .noise(0, 2.8, 0.9, { attack: 0.02, decay: 0.8 }, 0.06)
+      .tremolo(9, 0.25)
+      .finish(0.95),
+  frozen: (sr) => {
+    const m = new Mixer(1.2, sr);
+    [2093, 2637, 3136, 4186].forEach((f, i) => m.tone(i * 0.06, 0.8, f, 'sine', 0.18, { decay: 0.3 }));
+    return m.noise(0, 0.8, 0.2, { attack: 0.05, decay: 0.3 }, 0.95).finish(0.6);
+  },
+  'chomper-bite': (sr) =>
+    new Mixer(0.35, sr).noise(0, 0.12, 0.9, { decay: 0.03 }, 0.4).tone(0, 0.3, (t) => 110 - 200 * t, 'sine', 0.8, { decay: 0.09 }).finish(),
+  'grave-buster': (sr) => {
+    const m = new Mixer(1, sr);
+    for (let i = 0; i < 5; i++) m.noise(i * 0.18, 0.1, 0.7, { decay: 0.03 }, 0.35);
+    return m.lowpass(0.5).finish(0.7);
+  },
+  hypno: (sr) =>
+    new Mixer(0.9, sr).tone(0, 0.85, (t) => 500 + 250 * Math.sin(t * Math.PI * 2 * 7) - 200 * t, 'sine', 0.4, { attack: 0.03, decay: 0.5 }).finish(0.6),
+  vault: (sr) => new Mixer(0.5, sr).noise(0, 0.45, 0.5, { attack: 0.1, decay: 0.2 }, 0.3).tone(0, 0.4, (t) => 200 + 500 * t, 'triangle', 0.15, { decay: 0.2 }).finish(0.6),
+  rage: (sr) => new Mixer(1, sr).tone(0, 0.9, (t) => 110 + 30 * t, 'saw', 0.4, { attack: 0.05, decay: 0.5 }).tremolo(14, 0.5).lowpass(0.15).finish(0.7),
+  dancer: (sr) => arpeggio(new Mixer(1.2, sr), 0, [40, 43, 45, 47, 45, 43], 0.16, 0.18, 'square', 0.25).lowpass(0.2).finish(0.6),
+  'dirt-rise': (sr) => new Mixer(1.2, sr).noise(0, 1.1, 0.6, { attack: 0.1, decay: 0.5 }, 0.05).tone(0, 1, 55, 'sine', 0.4, { attack: 0.1, decay: 0.5 }).finish(0.6),
+  bowling: (sr) => new Mixer(0.9, sr).noise(0, 0.85, 0.5, { attack: 0.05, decay: 0.6 }, 0.04).tremolo(18, 0.4).finish(0.6),
+  'bowling-impact': (sr) => new Mixer(0.3, sr).tone(0, 0.25, (t) => 160 - 300 * t, 'sine', 0.8, { decay: 0.07 }).noise(0, 0.05, 0.6, { decay: 0.01 }, 0.6).finish(),
+  whack: (sr) => new Mixer(0.25, sr).noise(0, 0.08, 0.9, { decay: 0.02 }, 0.5).tone(0, 0.2, (t) => 240 - 400 * t, 'sine', 0.7, { decay: 0.05 }).finish(),
+  shovel: (sr) => new Mixer(0.3, sr).noise(0, 0.25, 0.7, { decay: 0.08 }, 0.25).finish(0.7),
   pause: (sr) => new Mixer(0.25, sr).tone(0, 0.09, 660, 'triangle', 0.4, { decay: 0.05 }).tone(0.1, 0.12, 440, 'triangle', 0.4, { decay: 0.06 }).finish(0.6),
 };
 

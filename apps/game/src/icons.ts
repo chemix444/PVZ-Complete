@@ -1,5 +1,5 @@
 import type { Application, Container } from 'pixi.js';
-import { plantArt, zombieArt } from '@pvz/assets';
+import { plantArt, zombieArtFor } from '@pvz/assets';
 import { PlantRegistry, ZombieRegistry } from '@pvz/content';
 
 const cache = new Map<string, Promise<string>>();
@@ -10,10 +10,7 @@ export function plantIcon(app: Application, id: string): Promise<string> {
 }
 
 export function zombieIcon(app: Application, id: string): Promise<string> {
-  return render(app, `zombie:${id}`, () => {
-    const def = ZombieRegistry.get(id);
-    return zombieArt({ armor: def.armor?.map((a) => a.id), flag: def.tags.includes('flag') }).root;
-  });
+  return render(app, `zombie:${id}`, () => zombieArtFor(ZombieRegistry.get(id).id).root);
 }
 
 function render(app: Application, key: string, build: () => Container): Promise<string> {
