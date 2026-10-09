@@ -66,12 +66,12 @@ const day: LevelDef[] = [
       {
         id: 'planted',
         when: { on: 'planted', count: 1 },
-        actions: [{ do: 'message', text: 'Sun pays for plants. Click the falling sun to collect it.' }, { do: 'release-waves', delay: 20 }],
+        actions: [{ do: 'message', text: 'Sun pays for plants. Falling sun is collected as soon as it lands.' }, { do: 'release-waves', delay: 20 }],
       },
       {
         id: 'collected',
         when: { on: 'sun-collected', count: 1 },
-        actions: [{ do: 'message', text: 'Keep collecting sun and plant more Peashooters. Zombies are on the way!', duration: 8 }],
+        actions: [{ do: 'message', text: 'Plant more Peashooters as your sun builds up. Zombies are on the way!', duration: 8 }],
       },
     ],
     rewards: [{ type: 'plant', id: 'sunflower' }],

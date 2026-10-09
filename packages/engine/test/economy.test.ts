@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { ProducerBehavior, SUN_LIFETIME, type Pickup } from '@pvz/engine';
+import { ProducerBehavior, type Pickup } from '@pvz/engine';
 import { command, makeSim, ofType, run, runUntil } from './helpers';
 
 describe('Sunflower production', () => {
+  it('collects its sun when the sun lands', () => {
+    const sim = makeSim({ sun: 0 });
+    command(sim, { type: 'debug-spawn-plant', plant: 'sunflower', row: 0, col: 0 });
+    runUntil(sim, () => sim.pickups.length > 0);
+    const sun = sim.pickups[0];
+    runUntil(sim, () => sun.state !== 'falling');
+    expect(sun.state).toBe('collecting');
+    runUntil(sim, () => !sun.alive);
+    expect(sim.sun).toBe(25);
+  });
+
   it('produces its first sun 300-1250 ticks after planting, then every 2350-2500', () => {
     for (let seed = 1; seed <= 25; seed++) {
       const sim = makeSim({ rngSeed: seed });
@@ -45,17 +56,19 @@ describe('Sky sun', () => {
     }
   });
 
-  it('falls to its landing spot and expires 750 ticks after landing', () => {
-    const sim = makeSim({ skySun: true });
+  it('falls at 1.34 px per tick and collects itself on the tick it lands', () => {
+    const sim = makeSim({ skySun: true, sun: 0 });
     let sun: Pickup | undefined;
     runUntil(sim, () => (sun = sim.pickups[0]) !== undefined);
-    const landY = sun!.landY;
-    runUntil(sim, () => sun!.state === 'resting');
-    expect(sun!.y).toBe(landY);
-    const landed = sim.tick;
-    const log = runUntil(sim, () => !sun!.alive);
-    expect(ofType(log, 'pickup-expired')).toHaveLength(1);
-    expect(sim.tick - landed).toBe(SUN_LIFETIME);
+    const startY = sun!.y;
+    run(sim, 10);
+    expect(sun!.y - startY).toBeCloseTo(13.4);
+    const log = runUntil(sim, () => sun!.state !== 'falling');
+    expect(sun!.state).toBe('collecting');
+    expect(ofType(log, 'pickup-collected')).toHaveLength(1);
+    expect(sim.counters.sunCollected).toBe(1);
+    runUntil(sim, () => !sun!.alive);
+    expect(sim.sun).toBe(25);
   });
 });
 

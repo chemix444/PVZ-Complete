@@ -25,7 +25,8 @@ export const pvz1Boards: BoardDef[] = [
     id: 'pvz1-day',
     name: 'Front Lawn (Day)',
     daytime: true,
-    skySun: { minX: 140, maxX: 690, startY: 40, minLandY: 170, maxLandY: 500, fallSpeed: 67 },
+    // Falls at twice the original 67 px/s by request; drop timing is unchanged.
+    skySun: { minX: 140, maxX: 690, startY: 40, minLandY: 170, maxLandY: 500, fallSpeed: 134 },
     view: { background: 'bg.pvz1.day', minX: -220, maxX: 1180, width: 800, height: 600 },
   },
   {

@@ -31,7 +31,7 @@ Every push to `main` (and to the current development branch) runs `.github/workf
 - Create a profile, then Start Adventure.
 - Pick plants for your seed bank and press Let's Rock.
 - Click a seed packet, then a lawn tile to plant. Right click or Escape drops the plant.
-- Click sun to collect it.
+- Sun collects itself when it lands; click it while it falls to grab it sooner.
 - From 1-5 on, click the shovel and then a plant to dig it up.
 - On conveyor levels, click a packet on the belt and then a tile; belt plants are free.
 - In Whack a Zombie, click zombies as they climb out of their graves.

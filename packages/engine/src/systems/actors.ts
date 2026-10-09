@@ -1,5 +1,5 @@
 import { ticks } from '../core/time';
-import type { Zombie } from '../entities';
+import type { Pickup, Zombie } from '../entities';
 import type { Simulation } from '../simulation';
 import type { SimSystem } from './types';
 
@@ -177,18 +177,12 @@ export class PickupSystem implements SimSystem {
         case 'falling':
           if (pickup.motion === 'sky') {
             pickup.y += pickup.vy;
-            if (pickup.y >= pickup.landY) {
-              pickup.y = pickup.landY;
-              pickup.state = 'resting';
-            }
+            if (pickup.y >= pickup.landY) land(sim, pickup);
           } else {
             pickup.vy += TOSS_GRAVITY;
             pickup.x += pickup.vx;
             pickup.y += pickup.vy;
-            if (pickup.vy > 0 && pickup.y >= pickup.landY) {
-              pickup.y = pickup.landY;
-              pickup.state = 'resting';
-            }
+            if (pickup.vy > 0 && pickup.y >= pickup.landY) land(sim, pickup);
           }
           break;
         case 'resting':
@@ -214,6 +208,14 @@ export class PickupSystem implements SimSystem {
       }
     }
   }
+}
+
+// Sun collects itself as soon as it lands, a deliberate change from the
+// original, where it waits on the ground to be clicked.
+function land(sim: Simulation, pickup: Pickup): void {
+  pickup.y = pickup.landY;
+  pickup.state = 'resting';
+  if (pickup.kind === 'sun') sim.collect(pickup);
 }
 
 export class MowerSystem implements SimSystem {

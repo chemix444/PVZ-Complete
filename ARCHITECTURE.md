@@ -119,7 +119,7 @@ Each tick runs, in order:
 9. `ZombieSystem` (status timers, rising from the ground, collapse timers, dying drain, zombie behaviors, hypnotized zombies leaving)
 10. `ProjectileSystem` (movement, range, collision, chill)
 11. `RollerSystem` (bowling nuts)
-12. `PickupSystem` (falling, expiry, flight to the sun bank)
+12. `PickupSystem` (falling, collecting sun as it lands, flight to the sun bank)
 13. `MowerSystem`
 14. extra systems from the level's `systems` list (world mechanics)
 15. `OutcomeSystem` (house reached, level cleared)

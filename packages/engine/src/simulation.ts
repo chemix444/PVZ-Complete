@@ -450,6 +450,15 @@ export class Simulation {
     return sun;
   }
 
+  /** Starts a pickup's flight to the bank (sun) or wins the level (reward). */
+  collect(pickup: Pickup): void {
+    if (!pickup.collectible || this.finished) return;
+    pickup.state = 'collecting';
+    if (pickup.kind === 'sun') this.counters.sunCollected++;
+    this.emit({ type: 'pickup-collected', pickupId: pickup.id, kind: pickup.kind });
+    if (pickup.kind === 'reward') this.win(pickup.rewards);
+  }
+
   addSun(amount: number): void {
     this.sun += amount;
     if (amount > 0) this.stats.sunCollected += amount;
@@ -534,12 +543,7 @@ export class Simulation {
       }
       case 'collect': {
         const pickup = this.byId.get(command.pickupId);
-        if (!(pickup instanceof Pickup) || !pickup.collectible) return;
-        if (this.finished) return;
-        pickup.state = 'collecting';
-        if (pickup.kind === 'sun') this.counters.sunCollected++;
-        this.emit({ type: 'pickup-collected', pickupId: pickup.id, kind: pickup.kind });
-        if (pickup.kind === 'reward') this.win(pickup.rewards);
+        if (pickup instanceof Pickup) this.collect(pickup);
         return;
       }
       case 'dig': {

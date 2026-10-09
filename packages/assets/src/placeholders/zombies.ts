@@ -503,9 +503,9 @@ export function zombieArt(options: ZombieArtOptions = {}): ZombieArt {
   if (options.flag) armFront.addChildAt(flagArt(), 0);
   const pole = options.pole ? poleArt() : undefined;
 
-  body.addChild(armBack, legBack, legFront, torso, head);
+  body.addChild(legBack, legFront, torso, head);
   if (pole) body.addChild(pole);
-  body.addChild(armFront, ...shields);
+  body.addChild(armBack, armFront, ...shields);
   const shadow = new Graphics().ellipse(57, 97, 24, 5).fill({ color: 0x000000, alpha: 0.22 });
   root.addChild(shadow, body);
   return { root, body, head, armFront, armBack, legFront, legBack, armor, armorRoot, pole };

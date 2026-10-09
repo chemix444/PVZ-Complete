@@ -8,6 +8,7 @@ What PVZ Complete reproduces, and how closely. PvZ 1 and PvZ 2 have separate sec
 | Close | Implemented with the right structure; one or more values or details are approximate or not yet verified against the game. The note says which. |
 | Incomplete | Partly implemented, or implemented in a simplified form that is known to differ. |
 | Missing | Not implemented. |
+| Changed | Deliberately differs from the original, by the project owner's choice. The note gives the original behavior. |
 
 Sources are observed gameplay and community-documented values (wiki pages and research tables). "Unverified" means the value was entered from documentation or memory and has not been measured against the running game in this project. Times are given in seconds and, for PvZ 1, centiseconds (cs), which are also simulation ticks.
 
@@ -20,9 +21,10 @@ Sources are observed gameplay and community-documented values (wiki pages and re
 | Starting sun | Exact | 50, except where a level sets its own (1-1 starts with 150). |
 | Sun value | Exact | 25 per sky sun and per Sunflower sun. |
 | Sky sun timing | Close | Next drop after min(950, 425 + 10n) + random 0..274 cs, n = suns fallen. Matches community docs; unverified here. |
-| Sky sun fall speed and landing area | Close | 0.67 px/cs; lands at y 170..500, x 140..690. Approximate. |
-| Sun lifetime | Close | Disappears 7.5 s after landing, blinking for the last 1.5 s. Unverified. |
-| Sun crediting | Close | Credited when the flying sun reaches the bank, not on click. Unverified. |
+| Sky sun fall speed | Changed | 1.34 px/cs, twice the original's approximate 0.67 px/cs. Drop timing is unchanged. |
+| Sky sun landing area | Close | Lands at y 170..500, x 140..690. Approximate. |
+| Sun collection | Changed | Sky sun and plant sun collect themselves the moment they land; clicking still grabs them in the air. The original leaves sun on the ground until clicked and removes it 7.5 s after landing (unverified), so that expiry no longer comes into play. |
+| Sun crediting | Close | Credited when the flying sun reaches the bank, not when collection starts. Unverified. |
 | Seed recharge | Exact | 7.5 s, 30 s or 50 s per plant, as listed below. |
 | Recharge at level start | Close | 30 s plants start with 20 s remaining, 50 s plants with 35 s. From community docs; unverified. |
 | Picking a packet | Close | Recharging or unaffordable packets buzz and cannot be picked up; the sun counter flashes when sun is short. |
